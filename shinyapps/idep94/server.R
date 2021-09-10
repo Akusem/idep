@@ -91,7 +91,9 @@ STRING_DB_VERSION <- "11.0" # what version of STRINGdb needs to be used
 ################################################################
 
 # relative path to data files
-datapath = "../../data/data104/"   # production server
+# datapath = "../../data/data104/"   # production server
+datapath = "/srv/data/"   # production server
+readPath = "/srv/data/testReadFolder"
 
 sqlite  <- dbDriver("SQLite")
 convert <- dbConnect( sqlite, paste0(datapath, "convertIDs.db"), flags=SQLITE_RO)  #read only mode
@@ -2596,13 +2598,36 @@ observe({  	updateSelectizeInput(session, "speciesName", choices = sort(STRING10
 	#   Read data
 	################################################################
  
+# Setup reactive values modifiable from server-side
+rv <- reactiveValues()
+
+# Look at URL params to determine if it should use precomputed data or not
+output$usePreComp <- reactive({
+		query <- parseQueryString(session$clientData$url_search)
+		if (!is.null(query[["usePreComp"]])) {
+			tmpDf = data.frame(
+				name=c(query[["fileName"]]),
+				type=c("text/plain"),
+				size=c(10),
+				datapath=c(file.path(readPath, query["fileName"]))
+			)
+			rv$fileExpression <- tmpDf
+			return(TRUE)
+		} else {
+			rv$fileExpression <- input$fileExpression
+			return(FALSE)
+		}
+	})
+
+outputOptions(output, "usePreComp", suspendWhenHidden = FALSE)
+
 	# read data file and do filtering and transforming
 readData <- reactive ({
-		inFile <- input$file1
+		inFile <- rv$fileExpression
 		inFile <- inFile$datapath
 
-		if(is.null(input$file1) && input$goButton == 0)   return(NULL)
-		if(is.null(input$file1) && input$goButton > 0 )   inFile = demoDataFile
+		if(is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
+		if(is.null(rv$fileExpression) && input$goButton > 0 )   inFile = demoDataFile
 		tem = input$dataFileFormat; tem=input$missingValue
 		if(!is.null(input$dataFileFormat)) # these are needed to make it responsive to changes
 			if(input$dataFileFormat== 1){  
@@ -2912,8 +2937,8 @@ output$sampleInfoTable <- renderTable({
 	},include.rownames=FALSE,striped=TRUE,bordered = TRUE, width = "auto",hover=T) 	
 	
 output$textTransform <- renderText({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
-		inFile <- input$file1
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
+		inFile <- rv$fileExpression
 		k.value =  readData()$mean.kurtosis	  
 		tem = paste( "Mean Kurtosis =  ", round(k.value,2), ".\n",sep = "")
 		if( k.value > kurtosis.log) tem = paste(tem, " Detected extremely large values.  When kurtosis >", kurtosis.log,
@@ -2929,8 +2954,8 @@ output$textTransform <- renderText({
 
 	# provide info on number of genes passed filter
 output$nGenesFilter <- renderText({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
-		inFile <- input$file1
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
+		inFile <- rv$fileExpression
 		if( is.null(readData()) ) return(NULL)
 		if( is.null(convertedData() ) ) return(NULL)
 		tem = input$noIDConversion; tem=input$missingValue
@@ -2965,7 +2990,7 @@ output$fileFormat <- renderUI({
 	})
 
 converted <- reactive({
-		if (is.null(input$file1) && input$goButton == 0)    return(NULL)
+		if (is.null(rv$fileExpression) && input$goButton == 0)    return(NULL)
 		tem = input$selectOrg;
 		isolate( {
 		
@@ -2982,7 +3007,7 @@ converted <- reactive({
 
 
 allGeneInfo <- reactive({
-		if (is.null(input$file1) && input$goButton == 0)    return(NULL)
+		if (is.null(rv$fileExpression) && input$goButton == 0)    return(NULL)
 		tem = input$selectOrg; 
 		isolate( {
 		withProgress(message="Looking up gene annotation", {
@@ -2992,7 +3017,7 @@ allGeneInfo <- reactive({
 	})
 	
 convertedData <- reactive({
-		if (is.null(input$file1) && input$goButton == 0) return()  
+		if (is.null(rv$fileExpression) && input$goButton == 0) return()  
 		##################################  
 		# these are needed to make it responsive to changes in parameters
 		tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -3039,7 +3064,7 @@ convertedData <- reactive({
 	})
 	
 convertedCounts <- reactive({
-		if (is.null(input$file1) && input$goButton == 0) return()  
+		if (is.null(rv$fileExpression) && input$goButton == 0) return()  
 		##################################  
 		# these are needed to make it responsive to changes in parameters
 		tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -3086,7 +3111,7 @@ convertedCounts <- reactive({
 	})
 
 convertedPvals <- reactive({
-		if (is.null(input$file1) && input$goButton == 0) return()  
+		if (is.null(rv$fileExpression) && input$goButton == 0) return()  
 		##################################  
 		# these are needed to make it responsive to changes in parameters
 		tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -3134,7 +3159,7 @@ convertedPvals <- reactive({
 	})
 
 GeneSetsPCA <- reactive({
-		if (is.null(input$file1) && input$goButton == 0)	return()
+		if (is.null(rv$fileExpression) && input$goButton == 0)	return()
 		tem = input$selectOrg
 		tem = input$selectGO6
 		tem =input$minSetSize; tem= input$maxSetSize; 
@@ -3146,7 +3171,7 @@ GeneSetsPCA <- reactive({
 	})	
 
 GeneSets <- reactive({
-		if (is.null(input$file1) && input$goButton == 0)	return()
+		if (is.null(rv$fileExpression) && input$goButton == 0)	return()
 		tem = input$selectOrg
 		tem = input$selectGO
 		tem =input$minSetSize; tem= input$maxSetSize; 
@@ -3162,11 +3187,11 @@ GeneSets <- reactive({
 ####### [TODO] Kevin Indentation Work 10/5 #######
 # show first 20 rows of data
 output$contents <- renderTable({
-	   inFile <- input$file1
+	   inFile <- rv$fileExpression
 		inFile <- inFile$datapath
-		if (is.null(input$file1) && input$goButton == 0)   return(NULL)
-	#    if (is.null(input$file1) && input$goButton > 0 )   inFile = "expression1_no_duplicate.csv"
-		if (is.null(input$file1) && input$goButton > 0 )   inFile = demoDataFile
+		if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
+	#    if (is.null(rv$fileExpression) && input$goButton > 0 )   inFile = "expression1_no_duplicate.csv"
+		if (is.null(rv$fileExpression) && input$goButton > 0 )   inFile = demoDataFile
 
 		tem = input$selectOrg
 		isolate({
@@ -3179,7 +3204,7 @@ output$contents <- renderTable({
 
 
 output$species <-renderTable({   
-      if (is.null(input$file1) && input$goButton == 0)    return()
+      if (is.null(rv$fileExpression) && input$goButton == 0)    return()
       isolate( {  #tem <- convertID(input$input_text,input$selectOrg );
 	  	  withProgress(message=sample(quotes,1), detail="Converting gene IDs", {
                   tem <- converted()
@@ -3193,7 +3218,7 @@ output$species <-renderTable({
 
 # show first 20 rows of processed data; not used
 output$debug <- renderTable({
-      if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+      if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	  tem = input$selectOrg; tem = input$lowFilter ; tem =input$NminSamples2; tem = input$transform
 	x <- convertedData()
 	#tem = GeneSets()
@@ -3207,7 +3232,7 @@ output$debug <- renderTable({
 ################################################################
 	
 output$EDA <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -3273,7 +3298,7 @@ output$EDA <- renderPlot({
 	
    }, height = 1600)
 EDA4download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -3369,7 +3394,7 @@ output$downloadEDAplot <- downloadHandler(
       dev.off()
       })     
 output$genePlot <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat ; tem = input$noIDConversion; tem=input$missingValue
@@ -3390,7 +3415,7 @@ output$genePlot <- renderPlot({
    })
 
 genePlot4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat ; tem = input$noIDConversion; tem=input$missingValue
@@ -3419,7 +3444,7 @@ output$downloadGenePlot <- downloadHandler(
       })     
 
 processedData <- reactive({
-		  if (is.null(input$file1) && input$goButton == 0)    return()
+		  if (is.null(rv$fileExpression) && input$goButton == 0)    return()
 		  
 		##################################  
 		# these are needed to make it responsive to changes in parameters
@@ -3469,7 +3494,7 @@ processedData <- reactive({
 	  })
 
 processedCountsData <- reactive({
-		  if (is.null(input$file1) && input$goButton == 0)    return()
+		  if (is.null(rv$fileExpression) && input$goButton == 0)    return()
 		  
 		##################################  
 		# these are needed to make it responsive to changes in parameters
@@ -3537,9 +3562,9 @@ output$downloadConvertedCounts <- downloadHandler(
  
 
 output$examineData <- DT::renderDataTable({
-   inFile <- input$file1
+   inFile <- rv$fileExpression
 	inFile <- inFile$datapath
-    if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 
 	tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 	isolate({
@@ -3551,7 +3576,7 @@ output$examineData <- DT::renderDataTable({
 
   
 output$totalCounts <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
     if (is.null(readData()$rawCounts))   return(NULL)
 	
 	##################################  
@@ -3592,7 +3617,7 @@ output$totalCounts <- renderPlot({
 
 # detecting sequencing depth bias
 output$readCountsBias <- renderText({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
     if (is.null(readData()$rawCounts))   return(NULL)
 	
 	totalCounts = colSums(readData()$rawCounts) 
@@ -3640,7 +3665,7 @@ output$listFactorsHeatmap <- renderUI({
 
 	# conventional heatmap.2 plot
 output$heatmap1 <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	##################################  
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -3765,7 +3790,7 @@ output$heatmap1 <- renderPlot({
 
 #heatmap for download
 plotHeatmap1 <- reactive ({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	##################################  
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -3893,7 +3918,7 @@ output$downloadHeatmap1 <- downloadHandler(
 
 # interactive heatmap with plotly
 output$heatmapPlotly <- renderPlotly({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	##################################  
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -3976,7 +4001,7 @@ output$heatmapPlotly <- renderPlotly({
   })  
   
 heatmapData <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
     x <- readData()$data
 
 	
@@ -4021,7 +4046,7 @@ output$downloadData <- downloadHandler(
 	)
 
 correlationMatrixData <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		# heatmap of correlation matrix
 		x <- readData()$data
 		maxGene <- apply(x,1,max)
@@ -4036,7 +4061,7 @@ output$downloadCorrelationMatrix <- downloadHandler(
 	    }
 	)
 output$correlationMatrix <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		# heatmap of correlation matrix
 		x <- readData()$data
 		maxGene <- apply(x,1,max)
@@ -4077,7 +4102,7 @@ output$correlationMatrix <- renderPlot({
   }, height = 600, width = 700  )#)
 
 correlationMatrix4Download <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		# heatmap of correlation matrix
 		x <- readData()$data
 		maxGene <- apply(x,1,max)
@@ -4123,7 +4148,7 @@ output$downloadCorrelationMatrixPlot <- downloadHandler(
       }) 
   
 output$sampleTree <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		# heatmap of correlation matrix
 		x <- readData()$data
 		maxGene <- apply(x,1,max)
@@ -4149,7 +4174,7 @@ output$sampleTree <- renderPlot({
   } )#, height = 500, width = 500)
 
 sampleTree4download <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		# heatmap of correlation matrix
 		x <- readData()$data
 		maxGene <- apply(x,1,max)
@@ -4182,7 +4207,7 @@ output$downloadSampleTree <- downloadHandler(
         dev.off()
       }) 
 output$distributionSD_heatmap <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null(Kmeans()) ) return(NULL)
 
 		##################################  
@@ -4258,7 +4283,7 @@ output$listFactors2 <- renderUI({
 
 # note this function is cloned below for download. Any changes made to it, a similar change need to be made to PCAplots4Download	
 output$PCA <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	##################################  
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -4455,7 +4480,7 @@ output$PCA <- renderPlot({
   }, height = 700, width = 700)
 
 PCAplots4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	##################################  
 	# these are needed to make it responsive to changes in parameters
 	tem = input$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -4659,7 +4684,7 @@ output$downloadPCA <- downloadHandler(
       })    
   
 PCAdata <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
     x <- readData()$data
 	
 	 result = prcomp(t(x))$x[,1:5]
@@ -4678,7 +4703,7 @@ PCAdata <- reactive({
 
 # correlation PCA with factors  
 output$PCA2factor <- renderUI({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	if(is.null(readSampleInfo())) return(NULL)
 	npc = 5 # number of Principal components
     x <- readData()$data
@@ -4722,7 +4747,7 @@ output$downloadPCAData <- downloadHandler(
 ################################################################
   
 Kmeans <- reactive({ # Kmeans clustering
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -4776,7 +4801,7 @@ Kmeans <- reactive({ # Kmeans clustering
   } )
   
 output$KmeansHeatmap <- renderPlot({ # Kmeans clustering
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -4799,7 +4824,7 @@ output$KmeansHeatmap <- renderPlot({ # Kmeans clustering
   }, width=600, height = 500)
 
 KmeansHeatmap4Download <- reactive({ # Kmeans clustering
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -4830,7 +4855,7 @@ output$downloadKmeansHeatmap <- downloadHandler(
       })
   
 output$KmeansNclusters <- renderPlot({ # Kmeans clustering
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	withProgress(message="k-means clustering", {
     x <- convertedData()
 	#x <- readData()
@@ -4863,7 +4888,7 @@ output$KmeansNclusters <- renderPlot({ # Kmeans clustering
   } , height = 500, width = 550)
   
 KmeansData <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	if( is.null(Kmeans()) ) return(NULL)
 	tem = input$KmeansReRun
 	##################################  
@@ -4891,7 +4916,7 @@ KmeansData <- reactive({
   })
   
 output$tSNEgenePlot <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null(Kmeans()) ) return(NULL)
 
 		##################################  
@@ -4939,7 +4964,7 @@ output$tSNEgenePlot <- renderPlot({
   }, height = 800, width = 800,res=120 )
 
 output$distributionSD <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null(Kmeans()) ) return(NULL)
 
 		##################################  
@@ -4989,7 +5014,7 @@ output$distributionSD <- renderPlot({
   }, height = 600, width = 800,res=120 )
 
 distributionSD4Download <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null(Kmeans()) ) return(NULL)
 
 		##################################  
@@ -5060,7 +5085,7 @@ output$downloadDataKmeans <- downloadHandler(
 	)	
 	
 KmeansGOdata <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectGO3
 	if( is.null(input$selectGO3 ) ) return (NULL)
 	if( input$selectGO3 == "ID not recognized!" ) return ( as.matrix("Gene ID not recognized.") )#No matching species
@@ -5187,7 +5212,7 @@ output$enrichmentPlotKmeans4Download <- downloadHandler(
       })
 	
 output$KmeansPromoter <- renderTable({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectGO3; tem = input$radioPromoterKmeans; tem=input$nGenesKNN; tem=input$nClusters
 	if( is.null(input$selectGO3 ) ) return (NULL)
 	#if( is.null(limma()$results) ) return(NULL)
@@ -5293,7 +5318,7 @@ output$listBlockFactorsDE <- renderUI({
 output$listModelComparisons <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   { # if using sample names
 		   
@@ -5333,7 +5358,7 @@ output$listModelComparisons <- renderUI({
 output$listInteractionTerms <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5381,7 +5406,7 @@ observe({
 output$experimentDesign <- renderText({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5399,7 +5424,7 @@ output$experimentDesign <- renderText({
 output$selectReferenceLevels1 <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5428,7 +5453,7 @@ output$selectReferenceLevels1 <- renderUI({
 output$selectReferenceLevels2 <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5456,7 +5481,7 @@ output$selectReferenceLevels2 <- renderUI({
 output$selectReferenceLevels3 <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5484,7 +5509,7 @@ output$selectReferenceLevels3 <- renderUI({
 output$selectReferenceLevels4 <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5512,7 +5537,7 @@ output$selectReferenceLevels4 <- renderUI({
 output$selectReferenceLevels5 <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5540,7 +5565,7 @@ output$selectReferenceLevels5 <- renderUI({
 output$selectReferenceLevels6 <- renderUI({
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if (is.null(readSampleInfo()) | is.null(input$selectFactorsModel) ) # if sample info is uploaded and correctly parsed.
 		   {  return(NULL)
 	   
@@ -5565,7 +5590,7 @@ output$selectReferenceLevels6 <- renderUI({
 	})	
 
 factorReferenceLevels <- reactive({
-	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$submitModelButton  # this is used to make it responsive only when model and comparisons are completed
 	
 	return( c(  input$referenceLevelFactor1,
@@ -5579,7 +5604,7 @@ factorReferenceLevels <- reactive({
 })
 	
 limma <- reactive({  
-	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$CountsDEGMethod; tem = input$countsLogStart
 	
@@ -5669,7 +5694,7 @@ limma <- reactive({
 
 	
 output$textLimma <- renderText({
-      if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+      if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
  	tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 	tem=input$limmaPval; tem=input$limmaFC
 	tem = input$submitModelButton 
@@ -5679,7 +5704,7 @@ output$textLimma <- renderText({
 
     
 output$vennPlot <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
 		
@@ -5743,7 +5768,7 @@ output$vennPlot <- renderPlot({
     }, height = 600, width = 600)
 
 vennPlot4Download <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
 		
@@ -5815,7 +5840,7 @@ output$DownloadVenn <- downloadHandler(
       })
 
 output$sigGeneStats <- renderPlot({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
 		if(is.null(limma()$results) ) return(NULL)
@@ -5871,7 +5896,7 @@ output$sigGeneStats <- renderPlot({
     })
 
 sigGeneStats4Download <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
 		if(is.null(limma()$results) ) return(NULL)
@@ -5931,7 +5956,7 @@ output$downloadSigGeneStats <- downloadHandler(
         dev.off()
       })	
 output$sigGeneStatsTable <- renderTable({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
 		if(is.null(limma()$results) ) return(NULL)		
@@ -5982,7 +6007,7 @@ output$listComparisonsVenn <- renderUI({
 	tem=input$limmaPval; tem=input$limmaFC
 	tem = input$submitModelButton 
 	tem = input$UpDownRegulated	
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectComparisonsVenn", label = NULL, # h6("Funtional Category"), 
                   choices = list("All" = "All"), selected = "All")  
 		}	 else { 
@@ -6008,7 +6033,7 @@ output$listComparisons <- renderUI({
 	tem = input$selectOrg
 	tem=input$limmaPval; tem=input$limmaFC
 	tem = input$submitModelButton ; tem = input$CountsDEGMethod	
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectContrast", label = NULL,  
                   choices = list("All" = "All"), selected = "All")  
 				  }	 else { 
@@ -6020,7 +6045,7 @@ output$listComparisons <- renderUI({
 output$listComparisonsPathway <- renderUI({
 	tem = input$selectOrg
 	tem = input$submitModelButton ; tem = input$CountsDEGMethod	
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectContrast1", label = NULL, # h6("Funtional Category"), 
                   choices = list("All" = "All"), selected = "All")  }	 else { 
 
@@ -6032,7 +6057,7 @@ output$listComparisonsPathway <- renderUI({
 output$listComparisonsGenome <- renderUI({
 	tem = input$selectOrg
 	tem = input$submitModelButton ; tem = input$CountsDEGMethod	
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectContrast1", label = NULL, # h6("Funtional Category"), 
                   choices = list("All" = "All"), selected = "All")  }	 else { 
 	  selectInput("selectContrast2", label="Select a comparison to visualize:",choices=limma()$comparisons
@@ -6041,7 +6066,7 @@ output$listComparisonsGenome <- renderUI({
 	
 	
 DEG.data <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC; 
 		
@@ -6090,7 +6115,7 @@ output$download.DEG.data <- downloadHandler(
 	)	
 	
 AllGeneListsGMT <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		tem = input$selectOrg
 		tem=input$limmaPval; tem=input$limmaFC
 		
@@ -6151,7 +6176,7 @@ output$downloadGeneListsGMT <- downloadHandler(
 ################################################################		
 				
 output$selectedHeatmap <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	tem = input$selectOrg
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast;
@@ -6187,7 +6212,7 @@ output$selectedHeatmap <- renderPlot({
     }, height = 400, width = 500)
 
 selectedHeatmap4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	tem = input$selectOrg
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast;
@@ -6231,7 +6256,7 @@ output$downloadSelectedHeatmap <- downloadHandler(
       })	
 
 selectedHeatmap.data <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	tem = input$selectOrg
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast;
@@ -6316,7 +6341,7 @@ output$download.selectedHeatmap.data <- downloadHandler(
 	
 	# Top DEGs  
 output$geneList <- renderTable({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	
@@ -6347,7 +6372,7 @@ output$geneList <- renderTable({
 
 	
 geneListDataExport <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 			tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 		tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 		tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6377,7 +6402,7 @@ geneListDataExport <- reactive({
 # list of DEGs ranked by absolute values of lfc
 # Ensembl ID	 log2 Fold Change	 Adj.Pval	 Symbol	 Chr	 Type	
 geneListData <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 			tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 		tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 		tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6455,7 +6480,7 @@ geneListData <- reactive({
 
   
 output$volcanoPlot <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6500,7 +6525,7 @@ output$volcanoPlot <- renderPlot({
   },height=450, width=500)
   
 volcanoPlot4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6553,7 +6578,7 @@ output$downloadVolcanoPlot <- downloadHandler(
       })
   
 output$volcanoPlotly <- renderPlotly({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6623,7 +6648,7 @@ output$volcanoPlotly <- renderPlotly({
 
   
 output$scatterPlot <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6699,7 +6724,7 @@ output$scatterPlot <- renderPlot({
   },height=450, width=500)
 
 scatterPlot4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6786,7 +6811,7 @@ output$downloadScatterPlot <- downloadHandler(
       })
 	  
 output$scatterPlotly <- renderPlotly({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6878,7 +6903,7 @@ output$scatterPlotly <- renderPlotly({
 
   
 output$MAplot <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -6952,7 +6977,7 @@ output$MAplot <- renderPlot({
   },height=450, width=500)
 
 MAplot4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -7029,7 +7054,7 @@ output$downloadMAPlot <- downloadHandler(
       })
 
 output$MAplotly <- renderPlotly({
-    if (is.null(input$file1)&& input$goButton == 0  )   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0  )   return(NULL)
 		tem = input$selectOrg; tem = input$noIDConversion
 	tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast
 	tem = input$CountsDEGMethod; tem = input$countsLogStart; tem = input$CountsTransform
@@ -7111,7 +7136,7 @@ output$MAplotly <- renderPlotly({
   })
   
 geneListGOTable <- reactive({		
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 		if( is.null( input$selectGO2) ) return (NULL)
 		if( input$selectGO2 == "ID not recognized!" ) return ( as.matrix("Gene ID not recognized.")) #No matching species
@@ -7239,7 +7264,7 @@ output$enrichmentNetworkPlotly <- renderPlotly({
 })	  
 	  
 output$DEG.Promoter <- renderTable({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	if( is.null(input$selectContrast)) return(NULL)
 
 	tem = input$selectOrg; tem = input$radio.promoter; tem = input$noIDConversion; tem=input$missingValue
@@ -7301,7 +7326,7 @@ output$DEG.Promoter <- renderTable({
 # STRING-db functionality
 # find Taxonomy ID from species official name 
 findTaxonomyID <- reactive({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if (input$submit2STRINGdb == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 		if( is.null( input$selectGO2) ) return (NULL)
@@ -7332,7 +7357,7 @@ findTaxonomyID <- reactive({
 STRINGdb_geneList <- reactive({
 	library(STRINGdb,verbose=FALSE)
 						   
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if (input$submit2STRINGdb == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 
@@ -7398,7 +7423,7 @@ output$STRINGDB_species_stat <- renderUI({
 
 output$STRINGDB_mapping_stat <- renderText({
 						   
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if (input$submit2STRINGdb == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 		if( is.null( input$selectGO2) ) return (NULL)
@@ -7414,7 +7439,7 @@ output$STRINGDB_mapping_stat <- renderText({
 stringDB_GO_enrichmentData <- function(input, output) {
 	library(STRINGdb,verbose=FALSE)
 						   
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if (input$submit2STRINGdb == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 		if( is.null( input$selectGO2) ) return (NULL)
@@ -7544,7 +7569,7 @@ observeEvent(input$submit2STRINGdb, {
 output$stringDB_network1 <- renderPlot({
 	library(STRINGdb)
 						   
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if (input$submit2STRINGdb == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 		if( is.null( input$selectGO2) ) return (NULL)
@@ -7592,7 +7617,7 @@ output$stringDB_network1 <- renderPlot({
 output$stringDB_network_link <- renderUI({
 		library(STRINGdb,verbose=FALSE)
 						   
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if (input$submit2STRINGdb == 0)   return(NULL)
 		if( is.null(input$selectContrast)) return(NULL)
 		if( is.null( input$selectGO2) ) return (NULL)
@@ -7670,7 +7695,7 @@ output$stringDB_network_link <- renderUI({
 # this updates geneset categories based on species and file
 output$selectGO1 <- renderUI({   # gene set for pathway analysis
 	  tem = input$selectOrg;
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectGO", label = h5("Select genesets (Choose KEGG to show pathway diagrams):"), 
                   choices = list("All available gene sets" = "All", "GO Biological Process" = "GOBP","GO Molecular Function" = "GOMF","GO Cellular Component" = "GOCC",
                                 "KEGG metabolic pathways" = "KEGG"), selected = "GOBP")  }	 else { 
@@ -7683,7 +7708,7 @@ output$selectGO1 <- renderUI({   # gene set for pathway analysis
 	
 output$selectGO2 <- renderUI({
 	  tem = input$selectOrg
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectGO2", label = NULL, # h6("Funtional Category"), 
                   choices = list("All available gene sets" = "All", "GO Biological Process" = "GOBP","GO Molecular Function" = "GOMF","GO Cellular Component" = "GOCC",
                                 "KEGG metabolic pathways" = "KEGG"), selected = "GOBP")  }	 else { 
@@ -7695,7 +7720,7 @@ output$selectGO2 <- renderUI({
 	
 output$selectGO3 <- renderUI({
 	  tem = input$selectOrg
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectGO3", label = NULL, # h6("Funtional Category"), 
                   choices = list("All available gene sets" = "All", "GO Biological Process" = "GOBP","GO Molecular Function" = "GOMF","GO Cellular Component" = "GOCC",
                                 "KEGG metabolic pathways" = "KEGG"), selected = "GOBP")  }	 else { 
@@ -7706,7 +7731,7 @@ output$selectGO3 <- renderUI({
 	
 output$selectGO4 <- renderUI({
 	  tem = input$selectOrg
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectGO4", label = NULL, # h6("Funtional Category"), 
                   choices = list("All available gene sets" = "All", "GO Biological Process" = "GOBP","GO Molecular Function" = "GOMF","GO Cellular Component" = "GOCC",
                                 "KEGG metabolic pathways" = "KEGG"), selected = "GOBP")  }	 else { 
@@ -7717,7 +7742,7 @@ output$selectGO4 <- renderUI({
 	
 output$selectGO5 <- renderUI({
 	  tem = input$selectOrg
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectGO5", label = NULL, # h6("Funtional Category"), 
                   choices = list("All available gene sets" = "All", "GO Biological Process" = "GOBP","GO Molecular Function" = "GOMF","GO Cellular Component" = "GOCC",
                                 "KEGG metabolic pathways" = "KEGG"), selected = "GOBP")  }	 else { 
@@ -7728,7 +7753,7 @@ output$selectGO5 <- renderUI({
 
 output$selectGO6 <- renderUI({  # for GSEA using PCA loadings
 	  tem = input$selectOrg
-      if (is.null(input$file1)&& input$goButton == 0 )
+      if (is.null(rv$fileExpression)&& input$goButton == 0 )
        { selectInput("selectGO6", label = h5("Select genesets"), # h6("Funtional Category"), 
                   choices = list("All available gene sets" = "All", "GO Biological Process" = "GOBP","GO Molecular Function" = "GOMF","GO Cellular Component" = "GOCC",
                                 "KEGG metabolic pathways" = "KEGG"), selected = "GOBP")  }	 else { 
@@ -7738,7 +7763,7 @@ output$selectGO6 <- renderUI({  # for GSEA using PCA loadings
 	})
 
 output$PGSEAplot <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	library(PGSEA,verbose=FALSE)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO;		tem = input$selectContrast1
@@ -7797,7 +7822,7 @@ if (is.null(input$selectContrast1 ) ) return(NULL)
     }, height = 800, width = 800)
 
 PGSEAplot4Download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	library(PGSEA,verbose=FALSE)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO;		tem = input$selectContrast1
@@ -7864,7 +7889,7 @@ output$PGSEAplot.Download <- downloadHandler(
       })
 	  
 PGSEAplot.data <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO;		tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -7936,7 +7961,7 @@ if (is.null(input$selectContrast1 ) ) return(NULL)
     })
 	
 output$PGSEAplotAllSamples <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	library(PGSEA,verbose=FALSE)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO ; tem = input$selectContrast1
@@ -7985,7 +8010,7 @@ output$PGSEAplotAllSamples <- renderPlot({
     }, height = 800, width = 800)
 
 PGSEAplotAllSamples4download <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	library(PGSEA,verbose=FALSE)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO ;  tem = input$selectContrast1
@@ -8042,7 +8067,7 @@ output$PGSEAplotAllSamples.Download <- downloadHandler(
       })
 	  
 PGSEAplotAllSamples.data <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	library(PGSEA,verbose=FALSE)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO  ; tem = input$selectContrast1
@@ -8095,7 +8120,7 @@ if (is.null(input$selectContrast1 ) ) return(NULL)
 
 output$gagePathway <- renderTable({
 
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO;	tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -8126,7 +8151,7 @@ output$gagePathway <- renderTable({
  
 gagePathwayData <- reactive({
 	library(gage,verbose=FALSE) # pathway analysis	
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO
@@ -8223,7 +8248,7 @@ gagePathwayData <- reactive({
 
   
 output$fgseaPathway <- renderTable({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -8254,7 +8279,7 @@ output$fgseaPathway <- renderTable({
  
 fgseaPathwayData <- reactive({
 	library(fgsea,verbose=FALSE) # fast GSEA
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -8357,7 +8382,7 @@ fgseaPathwayData <- reactive({
   
 ReactomePAPathwayData <- reactive({
 	library(ReactomePA,verbose=FALSE) # pathway analysis
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -8477,7 +8502,7 @@ ReactomePAPathwayData <- reactive({
 
   
 output$ReactomePAPathway <- renderTable({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
     tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -8536,7 +8561,7 @@ output$listSigPathways <- renderUI({
 	####################################
 			
 
-      if (is.null(input$file1)&& input$goButton == 0 | is.null(gagePathwayData()))
+      if (is.null(rv$fileExpression)&& input$goButton == 0 | is.null(gagePathwayData()))
 	  
        { selectInput("sigPathways", label = NULL, # h6("Funtional Category"), 
                   choices = list("All" = "All"), selected = "All")  }	 else { 
@@ -8580,7 +8605,7 @@ output$listSigPathways <- renderUI({
 	
 	
 selectedPathwayData <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg
 	tem = input$sigPathways; 
 	if(is.null(gagePathwayData() ) ) return(NULL)
@@ -8641,7 +8666,7 @@ output$downloadSelectedPathwayData <- downloadHandler(
   
   
 output$selectedPathwayHeatmap <- renderPlot({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg
 	tem = input$sigPathways; 
 	if(is.null(gagePathwayData() ) ) return(NULL)
@@ -8717,7 +8742,7 @@ output$selectedPathwayHeatmap <- renderPlot({
 
 
 output$KeggImage <- renderImage({
-    if (is.null(input$file1)&& input$goButton == 0)   return(blank)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(blank)
 
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$noIDConversion; tem=input$missingValue
@@ -9271,9 +9296,9 @@ attributes(my.keggview.native) <- attributes(tmpfun)  # don't know if this is re
 
 # list of pathways with details
 pathwayListData  <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem=input$limmaPval; tem=input$limmaFC
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
 	tem=input$nPathwayShow; tem=input$absoluteFold; tem =input$pathwayMethod
@@ -9402,7 +9427,7 @@ output$enrichmentPlotPathway4Download <- downloadHandler(
 
 output$enrichmentNetworkPlotPathway <- renderPlot({
     if(is.null(pathwayListData())) return(NULL)
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -9423,7 +9448,7 @@ output$enrichmentNetworkPlotPathway4Download <- downloadHandler(
 
 output$enrichmentNetworkPlotlyPathway <- renderPlotly({
     if(is.null(pathwayListData())) return(NULL)
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	tem = input$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
@@ -9439,7 +9464,7 @@ output$enrichmentNetworkPlotlyPathway <- renderPlotly({
   
 # visualizing fold change on chrs. 
 output$genomePlotly <- renderPlotly({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		#if(is.null(genomePlotDataPre() ) ) return(NULL)
 		
 		tem = input$selectOrg ; 
@@ -9596,7 +9621,7 @@ output$genomePlotly <- renderPlotly({
 	  
 # pre-calculating PREDA, so that changing FDR cutoffs does not trigger entire calculation
 genomePlotDataPre <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	if( input$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)
 	tem = input$selectOrg ; 
 	tem = input$selectContrast2
@@ -9713,7 +9738,7 @@ genomePlotDataPre <- reactive({
   
 # results from PREDA
 genomePlotData <- reactive({
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
     if(is.null(genomePlotDataPre() ) ) return(NULL)
 	if( input$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)	
 	tem = input$selectOrg ; 
@@ -9860,7 +9885,7 @@ output$genomePlot <- renderPlot({
 	library(PREDAsampledata,verbose=FALSE) 
 	library(hgu133plus2.db,verbose=FALSE)
 	if( input$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)	
-    if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+    if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
     if( is.null( genomePlotData() ) ) return(NULL)
 	tem = input$selectOrg ; 
 	tem = input$selectContrast2
@@ -9911,7 +9936,7 @@ output$downloadGenesInRegions <- downloadHandler(
 
 	
 output$chrRegionsList <- renderTable({
-	if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 	if( input$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)
   	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -9942,7 +9967,7 @@ output$chrRegionsList <- renderTable({
 
   
 output$chrRegions <- DT::renderDataTable({
-	if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 	if( input$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)  
  	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -9969,7 +9994,7 @@ output$chrRegions <- DT::renderDataTable({
 
   
 output$genesInChrRegions <- DT::renderDataTable({
-	if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 	if( input$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)  
 	##################################  
 	# these are needed to make it responsive to changes in parameters
@@ -9999,7 +10024,7 @@ output$genesInChrRegions <- DT::renderDataTable({
 #   Biclustering
 ################################################################
 biclustering <- reactive({
-	  if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+	  if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 
 		##################################  
 		# these are needed to make it responsive to changes in parameters
@@ -10077,7 +10102,7 @@ output$biclusterInfo <- renderText({
 		tem = input$nGenesBiclust
 		tem = input$selectBicluster
 		tem = input$biclustMethod
-		if (is.null(input$file1) && input$goButton == 0)   return(NULL)		
+		if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)		
 		if(  is.null(input$selectBicluster)) return("No cluster found! Perhaps sample size is too small." )
 		if (is.null(biclustering()  ) ){ # if sample info is uploaded and correctly parsed.
 		   return("No cluster found! Perhaps sample size is too small." )	   
@@ -10096,7 +10121,7 @@ output$biclusterInfo <- renderText({
   
 
 output$biclustHeatmap <- renderPlot ({
-	  if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+	  if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 
 		##################################  
 		# these are needed to make it responsive to changes in parameters
@@ -10153,7 +10178,7 @@ output$biclustHeatmap <- renderPlot ({
   }, height = 400, width = 400)
 
 output$geneListBclustGO <- renderTable({		
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null( input$selectGO4) ) return (NULL)
 		if( input$selectGO4 == "ID not recognized!" ) return ( as.matrix("Gene ID not recognized.")) #No matching species
 
@@ -10223,7 +10248,7 @@ output$geneListBclustGO <- renderTable({
 
 	
 output$geneListBicluster <- renderTable({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null( input$selectGO4) ) return (NULL)
 		if( input$selectGO4 == "ID not recognized!" ) return ( as.matrix("Gene ID not recognized.")) #No matching species
 
@@ -10277,7 +10302,7 @@ output$geneListBicluster <- renderTable({
 
   
 biclustData <- reactive({
-  		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null( input$selectGO4) ) return (NULL)
 		if( input$selectGO4 == "ID not recognized!" ) return ( as.matrix("Gene ID not recognized.")) #No matching species
 
@@ -10336,7 +10361,7 @@ output$download.biclust.data <- downloadHandler(
 ################################################################
  
 wgcna <- reactive ({
-	  if (is.null(input$file1) && input$goButton == 0)   return(NULL)
+	  if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
 
 		##################################  
 		# these are needed to make it responsive to changes in parameters
@@ -10514,7 +10539,7 @@ output$modulePlot <- renderPlot({
 		
 		
 output$networkHeatmap <- renderPlot({ 
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 		##################################  
 		# these are needed to make it responsive to changes in parameters
@@ -10556,7 +10581,7 @@ output$networkHeatmap <- renderPlot({
 
   
 moduleData <- reactive({
-  		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 		tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast; tem = input$selectGO4
@@ -10600,7 +10625,7 @@ output$download.WGCNA.Module.data <- downloadHandler(
 	
 	
 output$networkModuleGO <- renderTable({		
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		if( is.null( input$selectGO5) ) return (NULL)
 		if( input$selectGO5 == "ID not recognized!" ) return ( as.matrix("Gene ID not recognized.")) #No matching species
 
@@ -10705,7 +10730,7 @@ output$listWGCNA.Modules <- renderUI({
 
 	
 exportModuleNetwork <- reactive({
-  		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 		tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast; 
@@ -10795,7 +10820,7 @@ output$downloadSelectedModule <- downloadHandler(
 	)
 	  	
 output$moduleNetwork <- renderPlot({
-  		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 		tem = input$selectOrg; tem = input$noIDConversion; tem=input$missingValue
 		tem=input$limmaPval; tem=input$limmaFC; tem = input$selectContrast; 
@@ -10897,7 +10922,7 @@ output$moduleNetwork <- renderPlot({
   
 	# output user settings and session info
 output$RsessionInfo <- renderUI({
-	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 		
 	i =""
 	i = c(i,"We recommend users to save the following details about their analyses.")
@@ -10905,10 +10930,10 @@ output$RsessionInfo <- renderUI({
 		", hosted at http://ge-lab.org/idep/ on ", date(),".",sep="") )	
 	i = c(i,"<a href=\"https://github.com/iDEP-SDSU/idep\"target=\"_blank\"> Source code on Github.</a>")
 	
-	#inFile <- input$file1
+	#inFile <- rv$fileExpression
 	#inFile <- inFile$datapath
-	#if (is.null(input$file1) && input$goButton == 0)   return(NULL)
-	#if (is.null(input$file1) && input$goButton > 0 )   inFile = paste(demoDataFile,"(Demo file)")	  
+	#if (is.null(rv$fileExpression) && input$goButton == 0)   return(NULL)
+	#if (is.null(rv$fileExpression) && input$goButton > 0 )   inFile = paste(demoDataFile,"(Demo file)")	  
 	#i = c(i,paste("Input file:", inFile ))
 	i = c(i, paste("<br><strong>Data</strong><br>Species:",converted()$species[2]))	
 	i = c(i, paste("Number of samples:",dim(convertedData() )[2]))	
@@ -10981,7 +11006,7 @@ output$downloadRcode <- downloadHandler(
 	
 # find the corresponding file names for gene info, for download	
 geneInfoFileName <- reactive({
-  	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 	ix = grep(converted()$species[1,1],geneInfoFiles)
 	if (length(ix) == 0 ) {return(NULL)} else {
@@ -11006,7 +11031,7 @@ output$downloadGeneInfo <- downloadHandler(
 )
 # sampleInfo file name
 sampleInfoFileName <- reactive({
-  	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	if( is.null(input$file2) && !is.null( readData()$sampleInfoDemo ) ) # if using demo data
 		return(demoDataFile2) else 
 	if( is.null(input$file2) )
@@ -11028,7 +11053,7 @@ output$downloadSampleInfoFile <- downloadHandler(
 )
 # find the corresponding file names for gene info, for download	
 pathwayFileName <- reactive({
-  	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+  	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 
 	ix = grep(converted()$species[1,1],gmtFiles)
 	if (length(ix) == 0 ) {return(NULL)} else {
@@ -11067,7 +11092,7 @@ output$downloadRcode <- downloadHandler(
 
 # generate R code based on user input	
 Rcode <- reactive({
-	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 	i = "# R code for stand-alone iDEP analysis"
 	i = paste(i,"\n# by Steven Xijin Ge, South Dakota State University,  gexijin@gmail.com ")
@@ -11395,7 +11420,7 @@ output$downloadRcodeMarkdown <- downloadHandler(
 	
 # generate R code based on user input	
 RcodeMarkdown <- reactive({
-	if (is.null(input$file1)&& input$goButton == 0)   return(NULL)
+	if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)
 	
 
 	i = "---
