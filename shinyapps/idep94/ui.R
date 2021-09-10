@@ -59,38 +59,39 @@ iDEPversion,
       ) # conditionalPanel
 
 
-      ,radioButtons("dataFileFormat", 
-                     label = "2. Choose data type", 
-                     choices = list("Read counts data (recommended)"                                          = 1, 
-                                     "Normalized expression values (RNA-seq FPKM, microarray, etc.)"          = 2,
-                                     "Fold-changes and corrected P values from CuffDiff or any other program" = 3),
-                     selected = 1
-      )      
-      ,conditionalPanel("input.dataFileFormat == 3",
-        checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
-      )
-      
-      ,fileInput('file1', '3. Upload expression data (CSV or text)',
-                  accept = c(
-                    'text/csv',
-                    'text/comma-separated-values',
-                    'text/tab-separated-values',
-                    'text/plain',
-                    '.csv',
-                    '.tsv'          
-                  ) 
-      )
-      ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
-      ,fileInput('file2', h5('Optional: Upload an experiment design file(CSV or text)'),
-                  accept = c(
-                    'text/csv',
-                    'text/comma-separated-values',
-                    'text/tab-separated-values',
-                    'text/plain',
-                    '.csv',
-                    '.tsv'          
-                  )
-      )
+      ,conditionalPanel("!output.usePreComp",
+        radioButtons("dataFileFormat", 
+                      label = "2. Choose data type", 
+                      choices = list("Read counts data (recommended)"                                          = 1, 
+                                      "Normalized expression values (RNA-seq FPKM, microarray, etc.)"          = 2,
+                                      "Fold-changes and corrected P values from CuffDiff or any other program" = 3),
+                      selected = 1
+        )
+        ,conditionalPanel("input.dataFileFormat == 3",
+          checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
+        )
+
+        ,fileInput('fileExpression', '3. Upload expression data (CSV or text)',
+                    accept = c(
+                      'text/csv',
+                      'text/comma-separated-values',
+                      'text/tab-separated-values',
+                      'text/plain',
+                      '.csv',
+                      '.tsv'          
+                    ) 
+        )
+        ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
+        ,fileInput('file2', h5('Optional: Upload an experiment design file(CSV or text)'),
+                    accept = c(
+                      'text/csv',
+                      'text/comma-separated-values',
+                      'text/tab-separated-values',
+                      'text/plain',
+                      '.csv',
+                      '.tsv'          
+                    )
+        )
       ,tableOutput('species' ),
       h5("Check this out if you want example of our gene ids,
            or download gene mapping."),
@@ -139,6 +140,7 @@ iDEPversion,
               )) #end of gene id ui
       ,a( h5("?",align = "right"), href="https://idepsite.wordpress.com/data-format/",target="_blank")
                                                                                        # new window
+      )
     ), #sidebarPanel
   
   # Main Panel -------------------------------------
