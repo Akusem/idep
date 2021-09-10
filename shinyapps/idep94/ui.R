@@ -25,43 +25,49 @@ iDEPversion,
   sidebarLayout(
     # sidebar---------------------------------
     sidebarPanel(
-  
-      actionButton("goButton", "Click here to load demo data"),
-      tags$head(tags$style("#goButton{color: red;
-                                 font-size: 16px;
-                                 font-style: italic;
-                                 }"))                    
-      ,h5(" and just click the tabs for some magic!", style = "color:red")
-      ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
-      ,strong("1. Select or search for your species.")
-      #,selectInput("selectOrg", label = NULL,"Best matching species",width='100%') 
-                      ,selectizeInput('selectOrg', 
-                                  label    = NULL,
-                                  choices  = " ",
-                                  multiple = TRUE,
-                                  options  = list( maxItems     = 1,               
-                                                   placeholder  = 'Best matching species',
-                                                   onInitialize = I('function() { this.setValue(""); }'))  
-                                  #,selected = "Best matching species"                                                  
-                         )    
-      ,conditionalPanel("input.selectOrg == 'NEW'",
-        fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
-                  accept = c(
-                    'text/csv',
-                    'text/comma-separated-values',
-                    'text/tab-separated-values',
-                    'text/plain',
-                    '.csv',
-                    '.tsv',
-                    '.gmt'          
-                  )
-        )
-      ) # conditionalPanel
 
+      # actionButton("goButton", "Click here to load demo data"),
+      # tags$head(tags$style("#goButton{color: red;
+      #                            font-size: 16px;
+      #                            font-style: italic;
+      #                            }"))                    
+      # ,h5(" and just click the tabs for some magic!", style = "color:red")
+      # ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
+      # ,strong("1. Select or search for your species.")
+      # #,selectInput("selectOrg", label = NULL,"Best matching species",width='100%') 
+      #                 ,selectizeInput('selectOrg', 
+      #                             label    = NULL,
+      #                             choices  = " ",
+      #                             multiple = TRUE,
+      #                             options  = list( maxItems     = 1,               
+      #                                              placeholder  = 'Best matching species',
+      #                                              onInitialize = I('function() { this.setValue(""); }'))  
+      #                             #,selected = "Best matching species"                                                  
+      #                    )    
+      # ,conditionalPanel("input.selectOrg == 'NEW'",
+      #   fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
+      #             accept = c(
+      #               'text/csv',
+      #               'text/comma-separated-values',
+      #               'text/tab-separated-values',
+      #               'text/plain',
+      #               '.csv',
+      #               '.tsv',
+      #               '.gmt'          
+      #             )
+      #   )
+      # )
 
-      ,conditionalPanel("!output.usePreComp",
-        radioButtons("dataFileFormat", 
-                      label = "2. Choose data type", 
+      # Message when precomp data have been loaded
+      conditionalPanel("output.usePreComp",
+        h4("You can select the analysis steps")
+      ),
+
+      # Panel when loading library and using user data
+      conditionalPanel("!output.usePreComp",
+        h5("Wait for library loading", style="color:red", id="waitForLibrary")
+        ,radioButtons("dataFileFormat", 
+                      label = "1. Choose data type", 
                       choices = list("Read counts data (recommended)"                                          = 1, 
                                       "Normalized expression values (RNA-seq FPKM, microarray, etc.)"          = 2,
                                       "Fold-changes and corrected P values from CuffDiff or any other program" = 3),
@@ -71,7 +77,7 @@ iDEPversion,
           checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
         )
 
-        ,fileInput('fileExpression', '3. Upload expression data (CSV or text)',
+        ,fileInput('fileExpression', '2. Upload expression data (CSV or text)',
                     accept = c(
                       'text/csv',
                       'text/comma-separated-values',
