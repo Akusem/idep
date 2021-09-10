@@ -1,6 +1,6 @@
 # Modification
 
-In order to modify IDEP to use it for DOB, I have change and add the following code:
+In order to modify IDEP to use it for DOB, I have changed and added the following code:
 
 ## In `server.R`:
 
@@ -49,7 +49,7 @@ output$usePreComp <- reactive({
 		}
 	})
 
-# Inform UI of the use of precomputed data
+# Inform UI of the use of precomputed data or not
 outputOptions(output, "usePreComp", suspendWhenHidden = FALSE)
 ```
 
@@ -61,13 +61,12 @@ Replace `input$selectOrg` by `rv$selectOrg`
 Replace `input$gmtFile` by `rv$gmtFile`
 
 Close the wait for library message by adding `shinyjs::hideElement(id = "waitForLibrary")` in 
-output$fileFormat next to hideElement for loadMessage:
+output$fileFormat, next to hideElement for loadMessage:
 
 ```R
 output$fileFormat <- renderUI({
   shinyjs::hideElement(id = 'loadMessage')
-  # Line to add
-  shinyjs::hideElement(id = "waitForLibrary")
+  shinyjs::hideElement(id = "waitForLibrary") # Line to add
 ```
 
 ## In `ui.R`
@@ -78,7 +77,7 @@ for readability and consistancy.
 
 Put the code from `radioButtons("dataFileFormat", ` to `,a( h5("?",align = "right"), href="https://idepsite.wordpress.com/data-format/",target="_blank")` in a conditionnal panel with `"!output.usePreComp"` condition:
 
-Add also the h5 wait for library like below:
+Also, Add the h5 waitForLibrary like below:
 
 ```R
 conditionalPanel("!output.usePreComp",
