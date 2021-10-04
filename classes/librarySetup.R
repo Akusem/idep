@@ -1,4 +1,5 @@
 # dplyr complains this required libraries: libudunits2-dev, libmariadb-client-lgpl-dev
+#demo
 # install.packages("plotly", repos="http://cran.rstudio.com/", dependencies=TRUE)
 # sometimes need to remove all installed packages: https://www.r-bloggers.com/how-to-remove-all-user-installed-packages-in-r/ 
 list.of.packages <- c(
@@ -12,7 +13,7 @@ list.of.packages <- c(
 )
 
 list.of.bio.packages  <- c(
-  "getDEE2", "limma", "DESeq2", "edgeR", "gage", "fgsea", "ReactomePA", "pathview", "PREDA",
+  "BiocParallel", "getDEE2", "limma", "DESeq2", "edgeR", "gage", "fgsea", "ReactomePA", "pathview", "PREDA",
   "impute", "runibic","QUBIC","rhdf5", "STRINGdb",
   "PREDAsampledata", "sfsmisc", "lokern", "multtest", "hgu133plus2.db", 
    "org.Ag.eg.db","org.At.tair.db","org.Bt.eg.db","org.Ce.eg.db","org.Cf.eg.db",

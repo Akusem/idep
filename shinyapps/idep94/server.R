@@ -788,7 +788,16 @@ geneInfo <- function (converted,selectOrg){
 		ix = grep(findSpeciesById(selectOrg)[1,1], geneInfoFiles )
 	}
 	if(length(ix) == 1)  # if only one file           #WBGene0000001 some ensembl gene ids in lower case
-	{ x = read.csv(as.character(geneInfoFiles[ix]) ); x[,1]= toupper(x[,1]) } else # read in the chosen file 
+	{ x = read.csv(as.character(geneInfoFiles[ix]) ); 
+      x[,1]= toupper(x[,1]) 
+      # if symbol is missing use Ensembl IDs
+      x$symbol[ is.na( x$symbol) ] <- x[, 1]
+      # if duplicated symbol, paste Ensembl id to the end
+      n_occur <- data.frame(table(x$symbol))
+      ix_duplicated <- which(n_occur$Freq > 1) # rows with duplicated symbols
+      x$symbol[ix_duplicated] <- paste(x$symbol[ix_duplicated], x[ix_duplicated, 1] )
+
+    } else # read in the chosen file 
 	{ return(as.data.frame("Multiple geneInfo file found!") )   }
 	Set = match(x$ensembl_gene_id, querySet)
 	Set[which(is.na(Set))]="Genome"
@@ -1429,6 +1438,7 @@ DEG.limma <- function (x, maxP_limma=.1, minFC_limma=2, rawCounts,countsDEGMetho
 # Differential expression using DESeq2
 DEG.DESeq2 <- function (  rawCounts,maxP_limma=.05, minFC_limma=2, selectedComparisons=NULL, sampleInfo = NULL,modelFactors=NULL, blockFactor = NULL, referenceLevels=NULL){
 	library(DESeq2,verbose=FALSE) # count data analysis
+    library("BiocParallel")
 	groups = as.character ( detectGroups( colnames( rawCounts ), sampleInfo) )
 	g = unique(groups)# order is reversed	
 	
@@ -1481,7 +1491,7 @@ DEG.DESeq2 <- function (  rawCounts,maxP_limma=.05, minFC_limma=2, selectedCompa
 								design=~groups)								
 
 	if( is.null(modelFactors)  ) 
-		dds = DESeq(dds)  	else  
+		dds = DESeq(dds, parallel=TRUE, BPPARAM=MulticoreParam(6))  	else  
 	{    # using selected factors and comparisons
 		# build model
 		modelFactors = c(modelFactors,blockFactor) # block factor is just added in. 
@@ -1523,11 +1533,15 @@ DEG.DESeq2 <- function (  rawCounts,maxP_limma=.05, minFC_limma=2, selectedCompa
 				DESeq2.Object = paste(DESeq2.Object, " + ",tem)
 			}			
 		}
+
 		DESeq2.Object= paste( DESeq2.Object, ")") # ends the model
 
-		eval(parse(text = DESeq2.Object) )
-		dds = DESeq(dds)  # main function		
 		
+		eval(parse(text = DESeq2.Object) )
+		start_time <- Sys.time()		
+		dds = DESeq(dds, parallel=TRUE, BPPARAM=MulticoreParam(6))  # main function		
+		end_time <- Sys.time()
+		cat( paste("\nTime", end_time - start_time))	
 		# comparisons 
 		# "group: control vs. mutant"
 		comparisons = gsub(".*: ","",selectedComparisons)
@@ -2588,7 +2602,7 @@ function(input, output,session) {
  # allGeneInfo(): returns all information in the geneInfo file for each gene
  # geneSets(): gene set as a list for pathway analysis
 options(shiny.maxRequestSize = 200*1024^2) # 200MB file max for upload
-observe({  updateSelectizeInput(session, "selectOrg", choices = speciesChoice, selected = speciesChoice[1] )      })
+observe({  updateSelectizeInput(session, "selectOrg", choices = speciesChoice, selected = speciesChoice[1], server = TRUE )      })
 observe({  updateSelectInput(session, "heatColors1", choices = colorChoices )      })
 observe({  updateSelectInput(session, "distFunctions", choices = distChoices )      })
 observe({  updateSelectInput(session, "hclustFunctions", choices = hclustChoices )      })

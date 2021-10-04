@@ -25,6 +25,38 @@ iDEPversion,
   sidebarLayout(
     # sidebar---------------------------------
     sidebarPanel(
+  
+      actionButton("goButton", "Click here to load demo data"),
+      tags$head(tags$style("#goButton{color: red;
+                                 font-size: 16px;
+                                 font-style: italic;
+                                 }"))                    
+      ,h5(" and just click the tabs for some magic!", style = "color:red")
+      ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
+      ,strong("1. Optional:Select or search for your species.")
+      #,selectInput("selectOrg", label = NULL,"Best matching species",width='100%') 
+                      ,selectizeInput('selectOrg', 
+                                  label    = NULL,
+                                  choices  = " ",
+                                  multiple = TRUE,
+                                  options  = list( maxItems     = 1,               
+                                                   placeholder  = 'Best matching species',
+                                                   onInitialize = I('function() { this.setValue(""); }'))  
+                                  #,selected = "Best matching species"                                                  
+                         )    
+      ,conditionalPanel("input.selectOrg == 'NEW'",
+        fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
+                  accept = c(
+                    'text/csv',
+                    'text/comma-separated-values',
+                    'text/tab-separated-values',
+                    'text/plain',
+                    '.csv',
+                    '.tsv',
+                    '.gmt'          
+                  )
+        )
+      ), # conditionalPanel
 
       # actionButton("goButton", "Click here to load demo data"),
       # tags$head(tags$style("#goButton{color: red;
@@ -163,7 +195,6 @@ iDEPversion,
       ,h4("Ge, S.X., Son, E.W. & Yao, R. iDEP: an integrated web application for differential expression and pathway analysis of RNA-Seq data. BMC Bioinformatics 19, 534 (2018).", a("https://doi.org/10.1186/s12859-018-2486-6", href="https://doi.org/10.1186/s12859-018-2486-6"))
       ,br(),img(src='flowchart.png', align = "center",width="562", height="383")
      # ) # conditionalPanel
-
     ) # main panel
   ) #sidebarLayout
 ) #tabPanel
@@ -776,8 +807,8 @@ iDEPversion,
                               max   = 400, 
                               value = 100,
                               step  = 10) 
-                 ,htmlOutput("stringDB_network_link")
-                 ,tags$head(tags$style("#stringDB_network_link{color: blue; font-size: 15px;}"))
+                 #,htmlOutput("stringDB_network_link")  #no longer working due to update in STRING-db
+                 #,tags$head(tags$style("#stringDB_network_link{color: blue; font-size: 15px;}"))
                  ,br(),br()
                  ,h5("Interactions among proteins encoded by top up-regulated proteins", align = "center")
                  ,plotOutput("stringDB_network1")    

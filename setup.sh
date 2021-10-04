@@ -1,31 +1,33 @@
-# Based on digital ocean One click app: Docker-ce
+# Local install of iDEP and ShinyGO on a Linux server
+# requires docker, docker-compose
+#  Updated 9/23/2021 by Xijin.Ge@sdstate.edu
 
-docker build ./nginx/. -t nginx  #nginx image should be build very quick
+# idep folder should already be created by git clone.
+cd idep
 
-docker build . -t webapp #webapp image need hours to build
+#Build nginx image (this is fast)
+docker build ./nginx/. -t nginx  
+
+# Build iDEP main docker container; this can take 3 hours; This is now skip by using DockerHub
+# docker build . -t webapp 
+
+#Using the docker image hosted on DockerHub. Make sure this is up-to-date. If in doubt, build the image as above.
+docker pull gexijin/idep:latest
+sudo docker tag gexijin/idep webapp
+
 
 echo 'Docker images have been built. Start downloading data.'
 
-mkdir data
-cd data
+# Download and unzip database files; this can take 2 hours
+# use Amazon server for faster download
+wget http://18.235.92.206:8080/data104.tar.gz 
 
-wget https://sdsu.box.com/shared/static/c24f792ojoikpzu0lkpng8uuf9ychwm7.gz -O pathwayDB.tar.gz
-tar xvzf pathwayDB.tar.gz
-rm pathwayDB.tar.gz
-wget https://sdsu.box.com/shared/static/9v1ao6mwhduvrcx793j3answph9gqnkt.gz -O motif.tar.gz
-tar xvzf motif.tar.gz
-rm motif.tar.gz
-wget https://sdsu.box.com/shared/static/mns0k1uvwtfnsohoc89b984ih36nmnz9.gz -O geneInfo.tar.gz
-tar xvzf geneInfo.tar.gz
-rm geneInfo.tar.gz
-wget https://sdsu.box.com/shared/static/qwpdh36vcisgy1hcmadck8i8ezhvr2fh.gz -O data.go.tar.gz
-tar xvzf data.go.tar.gz
-rm data.go.tar.gz
-wget https://sdsu.box.com/shared/static/sorewt7w6iypmhg2k2xhyi8myeit156o.gz -O convertIDs.db.tar.gz
-tar xvzf convertIDs.db.tar.gz
-rm convertIDs.db.tar.gz
+#slower server
+#wget --no-check-certificate https://mft.sdstate.edu/public/file/3Y66fppA0Eym0G41taPtRw/data104.tar.gz .
+tar xvzf data104.tar.gz
+rm data104.tar.gz
 
 echo 'Data has been downloaded and unziped'
 
-echo 'All image are ready to run'
+echo 'iDEP docker images and databases are ready!'
 
