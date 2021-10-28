@@ -8984,6 +8984,7 @@ mypathview <- function (gene.data = NULL, cpd.data = NULL, pathway.id, species =
         gene.idtype = "ENTREZ"
     }
     if (gene.idtype != "KEGG" & !entrez.gnodes & !is.null(gene.data)) {
+        library("KEGGREST")
         id.type = gene.idtype
         if (id.type == "ENTREZ") 
             id.type = "ENTREZID"
@@ -8999,7 +9000,8 @@ mypathview <- function (gene.data = NULL, cpd.data = NULL, pathway.id, species =
         message("Info: Done with data retrieval!")
         kegg.ids = gsub(paste(species, ":", sep = ""), "", names(gene.idmap))
         in.ids = gsub(paste0(kid.map2[id.type], ":"), "", gene.idmap)
-        gene.idmap = cbind(in.ids, kegg.ids)
+        # gene.idmap = cbind(in.ids, kegg.ids)
+        gene.idmap = cbind(kegg.ids, in.ids)
         gene.data = mol.sum(gene.data, gene.idmap)
         gene.idtype = "KEGG"
     }
