@@ -9,6 +9,7 @@ library(plotly,verbose=FALSE)
 library('shinyjs', verbose = FALSE)
 library('shinyjs', verbose = FALSE)
 library('reactable', verbose = FALSE)
+library(visNetwork) # interative network graphs
 iDEPversion = "iDEP.94"
 
 shinyUI(
@@ -29,7 +30,14 @@ iDEPversion,
       conditionalPanel("output.usePreComp",
         h4("You can select the analysis steps")
       ),
-
+      # Fix excessive padding around the body 
+      tags$head(
+        tags$style("
+          body {
+            padding: 0 !important;
+          }"
+        )
+      ),
       # Panel when loading library and using user data
       conditionalPanel("!output.usePreComp",
         h5("Wait for library loading", style="color:red", id="waitForLibrary")
@@ -44,73 +52,42 @@ iDEPversion,
           checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
         )
 
-        ,fileInput('fileExpression', '2. Upload expression data (CSV or text)',
-                    accept = c(
-                      'text/csv',
-                      'text/comma-separated-values',
-                      'text/tab-separated-values',
-                      'text/plain',
-                      '.csv',
-                      '.tsv'          
-                    ) 
-        )
-        ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
-        ,fileInput('file2', h5('Optional: Upload an experiment design file(CSV or text)'),
-                    accept = c(
-                      'text/csv',
-                      'text/comma-separated-values',
-                      'text/tab-separated-values',
-                      'text/plain',
-                      '.csv',
-                      '.tsv'          
-                    )
-        )
-      ,tableOutput('species' ),
-      h5("Check this out if you want example of our gene ids,
-           or download gene mapping."),
-      actionButton(inputId = "geneIdButton",
-                   label =  "Optional: Gene ID Examples"),
-      bsModal(id = "geneIDBs", title = "Gene ID Examples",
-              trigger = "geneIdButton", size = "large",
-              fluidPage(shinyjs::useShinyjs(),
-                        sidebarLayout(fluid = TRUE,
-                                      sidebarPanel(#Side panel
-                                        #see server updateSelectizeInput 
-                                        selectizeInput(inputId = "userSpecie",
-                                                       label = "What's your specie name?", choices = NULL),
-                                        shiny::tags$h5("Can erase and type in box"),
-                                        
-                                        #see server updateSelectizeInput
-                                        selectizeInput(inputId = "userIDtype",
-                                                       label = "What's your ID type? (Optional)", choices = NULL),
-                                        shiny::tags$h5("Can erase and type in box"),
-                                        actionButton(inputId = "submitIDPage", label = "submit"),
-                                        actionButton(inputId = "resetIDPage", label = "reset"),
-                                        downloadButton(outputId = "downloadIDPage", label = "Download mapping.csv")
-                                      ),##End of side panel
-                                      mainPanel(reactable::reactableOutput(outputId = "tableResult"),
-                                                ##Instructions for the user
-                                                shiny::tags$div(
-                                                  shiny::tags$h1("Instructions for Usage"),
-                                                  shiny::tags$h4("This page's purpose is to give the user some interactive tools to look at our database IDs.
-                               There are two different uses for this page, see explanation below:"),
-                                                  shiny::tags$ul(
-                                                    shiny::tags$li(#Bullet point 1
-                                                      shiny::tags$h4("If you only pick a species,
-                                       you are receiving table with all the different IDs
-                                       related to that species. (Showen below)")
-                                                    ),#end of bullet point 1
-                                                    shiny::tags$li(#Bullet point 2
-                                                      shiny::tags$h4("If you pick a species and an ID type,
-                                       a table with all the IDs of the ID type you pick and how they map to ensembl IDs(our preferred ID database)
-                                       , and you can download a csv file of the mapping ID.")
-                                                    )#end of bullet point 2
-                                                  )#end of ul
-                                                ), ##End of instructions
-                                                reactable::reactableOutput(outputId = "tableDefault")
-                                      )##End of main panel
-                        )#END of sidebarLayout
-              )) #end of gene id ui
+      ,fileInput('fileExpression', '3. Upload expression data (CSV or text)',
+                  accept = c(
+                    'text/csv',
+                    'text/comma-separated-values',
+                    'text/tab-separated-values',
+                    'text/plain',
+                    '.csv',
+                    '.tsv'          
+                  ) 
+      )
+      ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
+      ,fileInput('file2', h5('Optional: Upload an experiment design file(CSV or text)'),
+                  accept = c(
+                    'text/csv',
+                    'text/comma-separated-values',
+                    'text/tab-separated-values',
+                    'text/plain',
+                    '.csv',
+                    '.tsv'          
+                  )
+      )
+      ,tableOutput('species' )
+
+      ,actionButton("MGeneIDexamples", "Example gene IDs")
+      ,bsModal("geneIDexamples", "What the gene IDs in our database look like?", "MGeneIDexamples", size = "large"
+               ,selectizeInput(inputId = "userSpecieIDexample",
+                               label = "Select or search for species", choices = NULL)
+               ,tableOutput("showGeneIDs4Species")
+
+       )# bsModal 4	
+
+      ,bsModal("orgInfoButton", "Search annotated species by common and scientific names, or NCBI taxonomy id. For other species, you can still use iDEP, except enrichment analysis.", "MorgInfo", size = "large"
+               ,DT::dataTableOutput('orgInfoTable')
+
+       )# bsModal 4	
+      ,h5("Try ", a(" ShinyGO", href="https://bioinformatics.sdstate.edu/go/",target="_blank"), "for GO enrichment analysis")
       ,a( h5("?",align = "right"), href="https://idepsite.wordpress.com/data-format/",target="_blank")
                                                                                        # new window
       )
@@ -377,6 +354,7 @@ iDEPversion,
         ,htmlOutput("selectGO3")
         ,tags$style(type='text/css', "#selectGO3 { width:100%;   margin-top:-9px}")
         ,checkboxInput("removeRedudantSets", "Remove redudant genesets", value = TRUE)
+        ,checkboxInput("useFilteredAsBackground", "Filtered genes as background for enrichment", value = TRUE)
         ,actionButton("ModalEnrichmentPlotKmeans", "Visualize enrichment")
         ,downloadButton('downloadKmeansGO',"Enrichment details")             
         ,a(h5("?",align = "right"), href="https://idepsite.wordpress.com/k-means/",target="_blank")
@@ -616,14 +594,15 @@ iDEPversion,
         ,h5("Enrichment analysis for DEGs:")
         ,htmlOutput("selectGO2")
         ,checkboxInput("UseFilteredGenesEnrich", 
-                         label = "Use filtered data as background in enrichment(slow)", 
+                         label = "Filtered genes as background for enrichment", 
                          value = TRUE)
         ,tags$style(type='text/css', "#selectGO2 { width:100%;   margin-top:-9px}")
         ,actionButton("ModalEnrichmentPlot", "Enrichment tree")
-        ,actionButton("ModalEnrichmentNetwork", "Enrichment network")       
+     
+        ,actionButton("ModalVisNetworkDEG", "Network (New!)" )  
+        ,tags$head(tags$style("#ModalVisNetworkDEG{color: red}"))   
         ,downloadButton('downloadGOTerms', "Enrichment details" )
         ,actionButton("STRINGdb_GO", "Enrichment using STRING API")
-        ,tags$head(tags$style("#STRINGdb_GO{color: blue}"))  
         ,h5("Also try",  a("ShinyGO", href="http://ge-lab.org/go/", target="_blank") )  
         ,a(h5("?",align = "right"), href="https://idepsite.wordpress.com/degs/", target="_blank")        
         
@@ -670,17 +649,33 @@ iDEPversion,
           ,plotOutput('enrichmentPlotDEG2') 
         ) #bsModal
       
-      # Enrichment network
-        ,bsModal("ModalEnrichmentPlot2", "Visualize enrichment", "ModalEnrichmentNetwork", size="large"
+      # visNetwork ------------------------------
+        ,bsModal("ModalVisNetworkDEG1", "Network of pathways", "ModalVisNetworkDEG", size="large"
           ,h5("Connected gene sets share more genes. Color of node correspond to adjuested Pvalues.")            
-          ,checkboxInput("enrichmentNetworkInteractive", label = "Interactive version", value = FALSE)
-          ,conditionalPanel("input.enrichmentNetworkInteractive==0" 
-            ,actionButton("layoutButton2", "Change layout")
-            ,downloadButton("enrichmentNetworkPlot4Download", "High-resolution figure")
-            ,plotOutput('enrichmentNetworkPlot'))
-          ,conditionalPanel("input.enrichmentNetworkInteractive==1"
-            ,plotlyOutput('enrichmentNetworkPlotly',width = "900px", height = "800px"))           
+          ,fluidRow(
+            column(2, actionButton("layoutVisDEG", "Change layout") ),
+            column(1, h5("Cutoff:"), align="right" ) ,
+            column(2, numericInput("edgeCutoffDEG", label = NULL, value = 0.30, min = 0, max = 1, step = .1), align="left"  ), 
+            column(2, checkboxInput("wrapTextNetworkDEG", "Wrap text", value = TRUE)), 
+            column(1, downloadButton("visNetworkDEGDownload","Network") ),
+            column(1, downloadButton("downloadEdgesDEG", "Edges")) ,
+            column(1, downloadButton("downloadNodesDEG", "Nodes"))
+           ) 
+ 
+		   ,selectInput("upORdownRegDEG", NULL,
+			 c("Both Up & Down" = "Both",
+			   "Up regulated" = "Up",
+			   "Down regulated" = "Down")) 
+
+           ,h6("Two pathways (nodes) are connected if they share 30% (default, adjustable) or more genes. 
+			   Green and red represents down- and up-regulated pathways. You can move the nodes by dragging them, zoom in and out by scrolling, 
+			   and shift the entire network by click on an empty point and drag. 
+			   Darker nodes are more significantly enriched gene sets. 
+			   Bigger nodes represent larger gene sets.  
+			   Thicker edges represent more overlapped genes. ")    
+           ,visNetworkOutput("visNetworkDEG",height = "800px", width = "800px")
         ) #bsModal
+       # end VisNetwork --------------------------------    
            
         # M-A plot
         ,bsModal("modalExample5555", "M-A plot", "showMAplot", size = "large",
@@ -835,7 +830,8 @@ iDEPversion,
         ,conditionalPanel("input.pathwayMethod == 1 | input.pathwayMethod == 2 |
                            input.pathwayMethod == 3| input.pathwayMethod == 4" 
           ,actionButton("ModalEnrichmentPlotPathway", "Pathway tree") 
-          ,actionButton("ModalEnrichmentNetworkPathway", "Pathway network")
+          ,actionButton("ModalVisNetworkPA", "Network(New!)" )
+        ,tags$head(tags$style("#ModalVisNetworkPA{color: red}"))   
           #,actionButton("ModalExaminePathways", "Gene expression by pathway")
           ,downloadButton('downloadPathwayListData', "Pathway list w/ genes")          
         )
@@ -889,17 +885,41 @@ iDEPversion,
 
         ,bsModal("ModalEnrichmentPlotPahtway2", "Significant pathways", "ModalEnrichmentNetworkPathway", size="large"
                  ,h5("Connected gene sets share more genes. Color of node correspond to adjuested Pvalues.")            
-                 ,checkboxInput("enrichmentNetworkInteractivePathway", label = "Interactive version", value = FALSE)
-                 ,conditionalPanel("input.enrichmentNetworkInteractivePathway==0"
-                                   ,actionButton("layoutButton3", "Change layout")
-                                   ,downloadButton("enrichmentNetworkPlotPathway4Download"
-                                   ,"High-resolution figure")
-                                   ,plotOutput('enrichmentNetworkPlotPathway'))
-                 ,conditionalPanel("input.enrichmentNetworkInteractivePathway==1" 
-                                   ,plotlyOutput('enrichmentNetworkPlotlyPathway'
-                                   ,width  = "900px" 
-                                   ,height = "800px"))           
+                 ,actionButton("layoutButton3", "Change layout")
+                 ,plotOutput('enrichmentNetworkPlotPathway')
+      
         )#bsModal    
+
+
+      # visNetwork ------------------------------
+        ,bsModal("ModalVisNetworkPA1", "Related pathways", "ModalVisNetworkPA", size="large"
+          ,h5("Connected gene sets share more genes. Color of node correspond to adjuested Pvalues.")            
+          ,fluidRow(
+            column(2, actionButton("layoutVisPA", "Change layout") ),
+            column(1, h5("Cutoff:"), align="right" ) ,
+            column(2, numericInput("edgeCutoffPA", label = NULL, value = 0.30, min = 0, max = 1, step = .1), align="left"  ), 
+            column(2, checkboxInput("wrapTextNetworkPA", "Wrap text", value = TRUE)), 
+            column(1, downloadButton("visNetworkPADownload","Network") ),
+            column(1, downloadButton("downloadEdgesPA", "Edges")) ,
+            column(1, downloadButton("downloadNodesPA", "Nodes"))
+           )    
+		   ,selectInput("upORdownRegPA", NULL,
+						 c("Both Up & Down" = "Both",
+						   "Up regulated" = "Up",
+						   "Down regulated" = "Down")) 
+
+           ,h6("This interactive plot also shows the relationship between enriched pathways. 
+			   Two pathways (nodes) are connected if they share 30% (default, adjustable) or more genes. 
+			   Green and red represents down- and up-regulated pathways. You can move the nodes by dragging them, zoom in and out by scrolling, 
+			   and shift the entire network by click on an empty point and drag. 
+			   Darker nodes are more significantly enriched gene sets. 
+			   Bigger nodes represent larger gene sets.  
+			   Thicker edges represent more overlapped genes. ")    
+           ,visNetworkOutput("visNetworkPA",height = "800px", width = "800px")
+        ) #bsModal
+       # end VisNetwork --------------------------------    
+
+
        
       ) # mainPanel
     )  #sidebarLayout     
@@ -910,18 +930,14 @@ iDEPversion,
 #  Genome view
 #================================================================================================== 
   ,tabPanel("Genome",
-    sidebarLayout(
-  
+    sidebarLayout(  
       # sidebar of Genome --------------------------------------------------------------------------------
-      sidebarPanel(
-        h5("This interactive map shows DEGs on the genome. 
-           Red and blue dots represent up- or down-regulated genes, respectively.
-           Mouse over to see gene symbols. Click and drag to zoom in.") 
-        ,htmlOutput("listComparisonsGenome")
+      sidebarPanel( 
+        htmlOutput("listComparisonsGenome")
         ,tags$style(type='text/css', "#listComparisonsPathway { width:100%;   margin-top:-12px}")  
         ,fluidRow(
           column(6, numericInput("limmaPvalViz", 
-                                 label = h5("Filters: FDR "), 
+                                 label = h5("Genes: FDR "), 
                                  value = 0.1,
                                  min   = 1e-5, 
                                  max   = 1,
@@ -935,20 +951,59 @@ iDEPversion,
         ) # fluidRow  
         ,tags$style(type='text/css', "#limmaPvalViz { width:100%;   margin-top:-12px}")
         ,tags$style(type='text/css', "#limmaFCViz { width:100%;   margin-top:-12px}")    
-      
-        ,br()
-        ,h5("To identify genomic regions significatly enriched with up- or down-regulated genes, we can use "
-        ,a("PREDA.", href="  https://academic.oup.com/bioinformatics/article/27/17/2446/224332/PREDA-an-R-package-to-identify-regional-variations"
-         ,target="_blank"),
-         "Very slow (5 mins), but may be useful in studying cancer or
-         other diseases that might involve chromosomal gain or loss."  )
+        
+     
+
+        ,fluidRow( 
+                  column(6, checkboxInput("labelGeneSymbol", "Label Genes", value = FALSE) ) 
+                  ,column(6, checkboxInput("ignoreNonCoding", "Coding genes only", value = TRUE) )  
+                  )
+        ,HTML('<hr style="height:1px;border:none;color:#333;background-color:#333;" />') 
+
+                  ,fluidRow(
+                    column(6, selectInput(inputId = "MAwindowSize",
+                                           label = h5("Window Size (Mb)"),
+                                           selected = 6,
+                                           choices = c(1, 2, 4, 6, 8, 10, 15, 20) ))
+                    ,column(6, selectInput(inputId = "MAwindowSteps",
+                                           label = h5("Steps"),
+                                           selected = 2,
+                                           choices = c(1, 2, 3, 4)))
+                   )
+                  ,selectInput(inputId = "chRegionPval", 
+                                           label = h5("FDR cutoff for window"),
+                                           selected = 0.0001,
+                                           choices = c(0.1, 0.05, 0.01, 0.001, 0.0001, 0.00001)) 
+        ,HTML('<hr style="height:1px;border:none;color:#333;background-color:#333;" />')  
+
         ,actionButton("runPREDA", "Run PREDA (5 mins)")
+        ,br()
+        ,div(style = "display:inline-block; float:right", actionButton("genomeTabButton", "Info"))
       ), # end of sidebar
     
       
       # main panel of Genome tab -----------------------------------------------------------------------------------
-      mainPanel(  
-        plotlyOutput("genomePlotly",height = "900px")
+      mainPanel(                   
+                  bsModal("genomeTabButtonID", "View your genes on chromosomes", "genomeTabButton", size = "large"
+                          ,h3("Where are your differentially expressed genes (DEGs) located on the genome?" )
+                          ,p("Red and blue dots represent significantly up- and down-regulated genes, respectively, according to the criteria on the side panel. These criteria could differ from the one in DEG1 tab. The distance of the dots from the closest chromosome is proportional to the log2 fold-change (FC).")
+
+                         ,h3("Are there regions of the genome where genes are coherently up- or down-regulated?")
+                         ,p("To answer this question, we scan the genome with sliding windows. Within each window we take several steps to slide forward. For example if you choose a window size = 6Mbps and steps = 3, the first window is from 0 to 6 Mbps, the 2nd  from 2 to 8Mbps, and the third from 4 to 10 Mbps, and so on.")
+                         ,p("For all genes in a window/region, we test whether the mean of FC of these genes is zero using a t-test. All genes analyzed by DESeq2 or limma, significant or otherwise, are included in this analysis. Hence this result is indepdent of our DEG cutoffs. P values from the test of the mean are adjusted to FDR. Essentially, we considered genes located in a genomic region as a gene set or pathway, and we performed simple pathway analysis by asking whether these genes are behaving non-randomly.")
+
+                         ,p("Based on an FDR cutoff for the windows, red and blue segments indicate genomic regions with genes coherently up- or down-regulated, respectively.  Below you can adjust the window size, and steps in a window, and FDR cutoff for windows.  Mouse over to see gene symbols or IDs. Zoom in regions of interest. The chromosomes may be only partly shown as we use the last gene's location to draw the line.")
+
+                         ,p("As an alternative approach, you can use "
+                             ,a("PREDA.", href="https://doi.org/10.1093/bioinformatics/btr404",target="_blank"),
+                             "Very slow (5 mins), but may be useful in studying cancer or
+                             other diseases that might involve chromosomal gain or loss."  ) 
+                   )
+           
+
+                  ,plotlyOutput("genomePlotly",height = "900px")
+
+  
         ,bsModal("modalExample111", "Differentially expressed genomic loci", "runPREDA", size="large"
                  ,fluidRow( 
                            column(3, numericInput("RegionsPvalCutoff", 
@@ -1182,6 +1237,9 @@ iDEPversion,
                           ,"Experiment design file"))
         ,br()
         ,h4("Previous versions of iDEP")
+        ,a("iDEP 0.93 with Ensembl Release 103, archived on Oct. 15, 2021 "
+           , href="http://bioinformatics.sdstate.edu/idep93/")  
+        ,br()
         ,a("iDEP 0.92 with Ensembl Release 100, archived on May 20, 2021 "
            , href="http://bioinformatics.sdstate.edu/idep92/")  
         ,br()
@@ -1249,6 +1307,10 @@ iDEPversion,
        ,h5("5/19/2019: v0.90 Annotation database upgrade. Ensembl v 96. Ensembl plants v.43, and Ensembl Metazoa v.43. STRING-db v10")
        ,h5("2/3/2020: v0.90 customizable PCA plot and scatter plot")
        ,h5("5/10/2021: V0.93 updated to Ensembl Release 103 and String-DB v11.")
+       ,h5("10/15/21: For GO enrichment analysis, we now recommend using background genes, instead of all genes on the genome. In the KNN and DEG2 tabs, it is now the default that all genes passed the filter in Pre-Process tab are used as a customized background.")
+      ,h4("10/18/20: Interactive network enabling users to easily visualize the relatedness of significant pathways similar to EnrichmentMap. ")
+
+
        ,br(),br()
        ,h5("In loving memory of my parents. X.G.")
 

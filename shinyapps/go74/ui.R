@@ -15,26 +15,40 @@ library(plotly) # interactive network plot
 library(visNetwork)
 library('shinyjs', verbose = FALSE)
 library('reactable', verbose = FALSE)
+columnSelection = list("-log10(FDR)" = "EnrichmentFDR", 
+                        "Fold Enrichment" = "FoldEnrichment", 
+                        "Genes" =  "nGenes", 
+                        "Category Name" = "Pathway")
 ui <- fluidPage(
   # Application title
   sidebarLayout(
     
     sidebarPanel(
-      titlePanel("ShinyGO v0.74: Gene Ontology Enrichment Analysis + more"),  
-      
+      titlePanel("ShinyGO v0.741: Gene Ontology Enrichment Analysis + more"),  
+       h5("Select or search your species. Or use our best guess."),
+       fluidRow( 
+         column(9, selectizeInput('selectOrg', 
+                     label    = NULL,
+                     choices  = " ",
+                     multiple = TRUE,
+                     options  = list( maxItems     = 1,               
+                                      placeholder  = 'Best matching species',
+                                      onInitialize = I('function() { this.setValue(""); }')) 
+                  )), 
+        column(3, actionButton("MorgInfo", "Info"))  
+      ),  
       fluidRow(
-        column(8,   actionButton("useDemo", "Use demo genes"),	  	  ),
+        column(8,   actionButton("useDemo1", "Demo genes"),	  	  ),
+        #column(4,   actionButton("useDemo2", "Demo 2"),	  	  ),
         column(4,  p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))	  	  )
       ),
       tags$style(type="text/css", "textarea {width:100%}"),	  	
-      
-      
-      
+                
       tags$textarea(id = 'input_text', placeholder = 'Just paste a list of genes and click Submit. More adjustments below. Most types of gene IDs accepted. Double check the guessed species, and adjust if needed. ', rows = 8, ""),
       
       
       fluidRow(
-        column(8,  actionButton("backgroundGenes", "Customize background")	),
+        column(8,  actionButton("backgroundGenes", "Background (recommended)")	),
         column(4,   actionButton("goButton", strong("Submit"))	  	  )
       ),
       br(),
@@ -58,71 +72,123 @@ ui <- fluidPage(
                            selected = "30")
         )
       ),
-      
       #tags$style(type='text/css', "#minFDR { width:100%;   margin-top:-15px}"),  
       # selectInput("selectOrg", label = NULL,"Best matching species",width='100%'),  
       
-      h5("Select or search your species. Or use our best guess."),
-      selectizeInput('selectOrg', 
-                     label    = NULL,
-                     choices  = " ",
-                     multiple = TRUE,
-                     options  = list( maxItems     = 1,               
-                                      placeholder  = 'Best matching species',
-                                      onInitialize = I('function() { this.setValue(""); }'))  
-                     #,selected = "Best matching species"                                                  
-      ), 
+
       tableOutput('species' ),
-      h5("Check this out if you want example of our gene ids,
-           or download gene mapping."),
-      actionButton(inputId = "geneIdButton",
-                   label =  "Optional: Gene ID Examples")
+      actionButton("MGeneIDexamples", "Gene IDs examples"),
+      h5("Try ", a(" iDEP", href="https://bioinformatics.sdstate.edu/idep/",target="_blank"), "for RNA-Seq data analysis")
+
+
     ), # sidebarPanel
     mainPanel(
       tabsetPanel(
         tabPanel("Enrichment" 
                  ,conditionalPanel("input.goButton == 0 "  # welcome screen
-                                   # ,br(),br(),h2("Scheduled maintenance from 8am to 11am (US Central Standard Time) Wednesday Dec. 18, 2019. Service will be temporarily unavailable.",  style = "color:red"),br(),br()
-                                   #,br(),br(),h3("We need your support! We are writing a grant proposal (due June 5th) to NIH to seek support for the development and maintenance of ShinyGO. A brief email on how this tool helped your research would go a long way to support our tiny team, even if you are a graduate student. ",a("Email",href="mailto:Xijin.Ge@SDSTATE.EDU?Subject=ShinyGO support letter"),  style = "color:blue")
-                                   ,h3("Live in testing mode 9/3/2021. Database updated to Ensembl Release 104 and STRING v11.")
-                                   ,h4("We recently hired Jenny Qi for database updates and user support.",
+                                   ,p("Oct25, 2021: Interactive genome plot. Identificantion of genomic regions signficantly enriched with user genes.")
+                                   ,p("Oct.23, 2021: Version 0.741 A fully customizable enrichment chart! Switch between bar, dot or lollipop plots.  Detailed gene informations with links on the Genes tab.")
+                                   ,p("Oct. 15, 2021: Version 0.74. Database updated to Ensembl Release 104 and STRING v11. We now recommends the use of background genes in enrichment analysis. V.0.74 is much faster with even large set of background genes.")
+                                   ,p("We recently hired Jenny for database updates and user support.",
                                        a("Email Jenny ",href="mailto:gelabinfo@gmail.com?Subject=ShinyGO"),
                                        "for questions, suggestions or data contributions.") 
-                                   ,h3("5/23/2021: V. 0.65 Annotation update to Ensembl Release 103 and STRING-db V11. Includes 5000 species and tens of thousands of 
-         manually collected pathways for 20 model organisms.", style = "color:red")
+
                                    
-                                   ,h4("If your gene IDs are not recognized, please let us know. We might be able to add customized gene mappings to Ensembl gene IDs.")
+                                   #,h4("If your gene IDs are not recognized, please let us know. We might be able to add customized gene mappings to Ensembl gene IDs.")
                                    
-                                   ,h4("2/3/2020: Now published by", a("Bioinformatics.", href="https://doi.org/10.1093/bioinformatics/btz931",target="_blank"))
-                                   ,h4("Just paste your gene list to get enriched GO terms and othe pathways for over 400 plant and animal species, 
+                                   ,p("2/3/2020: Now published by", a("Bioinformatics.", href="https://doi.org/10.1093/bioinformatics/btz931",target="_blank"))
+                                   ,p("Just paste your gene list to get enriched GO terms and othe pathways for over 400 plant and animal species, 
 				    based on annotation from Ensembl , Ensembl plants and Ensembl Metazoa. An additional 5000 genomes 
 				    (including bacteria and fungi) are   annotated based on STRING-db (v.11). In addition, it also produces
 				    KEGG pathway diagrams with your genes highlighted, hierarchical clustering trees and networks summarizing 
 				    overlapping terms/pathways, protein-protein interaction networks, gene characterristics plots, and enriched promoter motifs. 
                  See example outputs below:")			
                                    ,br(),img(src='enrich.png', align = "center",width="660", height="339")
+                                   ,br(),img(src='enrichmentChart.png', align = "center",width="700", height="400")
                                    ,br(),br(),img(src='KEGG2.png', align = "center",width="541", height="360")
                                    ,br(),br(),img(src='GOtree3.png', align = "center",width="500", height="258")
                                    ,br(),br(),img(src='GOnetwork2.png', align = "center",width="500", height="248")
                                    ,br(),br(),img(src='PPInetwork2.png', align = "center",width="500", height="391")	
-                                   ,br(),br(),img(src='chr.png', align = "center",width="444", height="338")			
+                                   ,br(),br(),img(src='chr.png', align = "center",width="444", height="338")
+                                   ,br(),br(),img(src='downSyndrome.png', align = "center",width="371", height="276")				
                                    ,br(),br(),img(src='promoter.png', align = "center",width="717", height="288")					
                  )
-                 
+                 ,br()
+                 ,p("FDR is adjusted from the hypergeometric test. Fold Enrichment is defined as the percentage of genes in your list belonging to a pathway, divided by the corresponding percentage in the background. FDR tells us how likely the enrichment is by chance; Fold Enrichment indicates how drastically genes of a certain pathway is overrepresented. We think the latter deserves at least some attention.")
+                 ,div(style="display:inline-block", 
+                          selectInput(inputId = "SortPathways",
+                              label = NULL,
+                              choices = c("Sort by FDR" = "Sort by FDR", 
+                                          "Sort by Fold Enrichment" = "Sort by Fold Enrichment", 
+                                          "Sort by Genes" =  "Sort by Genes", 
+                                          "Sort by Category Name" = "Sort by Category Name"),
+                              selected = "Sort by Fold Enrichment" ),
+                     style="algn:right")
+
                  ,tableOutput('EnrichmentTable')	
                  ,conditionalPanel("input.goButton != 0", 
                                    downloadButton('downloadEnrichment', 'Download table with gene IDs')			
                                    ,br(),br()
                  )			
-                 ,conditionalPanel("input.selectGO == 'KEGG'", 
-                                   htmlOutput('listSigPathways')
-                                   ,br(),br(),imageOutput("KeggImage", width = "100%", height = "100%")				
-                                   ,br(),br()	 
-                 )
-                 ,h5("Enrichment analysis based on hypergeometric distribution followed by FDR correction.")
-                 ,h5("Select KEGG pathways in the left to display your genes in pathway diagrams.")
+
         ) # enrichment tab
         #,tabPanel("Details", tableOutput('tableDetail')  )
+
+ #---Enrichment Chart-----------------------------------------------------------
+        ,tabPanel("Chart" 
+                  ,plotOutput('enrichChart')
+                  ,br(), h4("Adjusting the width of your browser window to resize figure.")
+                  ,fluidRow(
+                    column(3, selectInput(inputId = "SortPathwaysPlot",
+                                          label = h5("Sort Pathway by"),
+                                          choices = columnSelection,
+                                          selected = columnSelection[2] ) )
+                    ,column(3, selectInput(inputId = "SortPathwaysPlotX",
+                                           label = h5("x-axis"),
+                                           choices = columnSelection[1:3],
+                                           selected = columnSelection[2] )  )
+                     ,column(3, selectInput(inputId = "SortPathwaysPlotColor",
+                                           label = h5("Color"),
+                                           choices = columnSelection[1:3],
+                                           selected = columnSelection[1] )  )
+                     ,column(3, selectInput(inputId = "SortPathwaysPlotSize",
+                                           label = h5("Size"),
+                                           choices = columnSelection[1:3],
+                                           selected = columnSelection[3] )  )
+                  ) # first row
+
+                  ,fluidRow(
+                    column(3, numericInput(inputId = "SortPathwaysPlotFontSize",
+                                           label = h5("Font Size"),
+                                           value = 12,
+                                           min = 3,
+                                           max = 18,
+                                           step = 1 ) )
+                    ,column(3, numericInput(inputId = "SortPathwaysPlotMarkerSize",
+                                           label = h5("Circle Size"),
+                                           value = 4,
+                                           min = 0,
+                                           max = 10,
+                                           step = 1 ))
+                    ,column(3, selectInput(inputId = "SortPathwaysPlotHighColor",
+                                           label = h5("Color:High"),
+                                           choices = c("red", "orange", "yellow", "green", "blue", "purple"),
+                                           selected = "red"
+                                           ))
+                    ,column(3, selectInput(inputId = "SortPathwaysPlotLowColor",
+                                           label = h5("Color:Low"),
+                                           choices = c("red", "orange", "yellow", "green", "blue", "purple"),
+                                           selected = "blue"
+                                           ))
+                  ) # 2nd row
+                  ,selectInput(inputId = "enrichChartType",
+                                           label = h5("Chart type"),
+                                           choices = c("lollipop", "dotplot", "barplot"),
+                                           selected = "lollipop"
+                                           )
+        )
+
+ #---Tree-----------------------------------------------------------
         ,tabPanel("Tree" 
                   ,h5("A hierarchical clustering tree summarizing the correlation among significant pathways 
        listed in the Enrichment tab. Pathways with many shared genes are clustered together. 
@@ -130,14 +196,15 @@ ui <- fluidPage(
                   ,downloadButton('GOTermsTree4Download','Figure' )
                   ,plotOutput('GOTermsTree')
         )
-        
+
+ #---Enrichment Chart-----------------------------------------------------------        
         ,tabPanel("Network" 
                   ,fluidRow(
                     column(2, actionButton("layoutButton", "Change layout") ),
                     column(2, actionButton("GONetwork", "Static plot") ),
                     column(2, h5("Edge cutoff:"), align="left" ) ,
-                    column(2, numericInput("edgeCutoff", label = NULL, value = 0.20, min = 0, max = 1, step = .1), align="right"  ), 
-                    column(2, checkboxInput("wrapTextNetwork", "Wrap text", value = FALSE)) 
+                    column(2, numericInput("edgeCutoff", label = NULL, value = 0.30, min = 0, max = 1, step = .1), align="right"  ), 
+                    column(2, checkboxInput("wrapTextNetwork", "Wrap text", value = TRUE)) 
                   ),      
                   visNetworkOutput("enrichmentNetworkPlotInteractive",height = "800px", width = "800px"),
                   downloadButton("enrichmentNetworkPlotInteractiveDownload","Download HTML"),
@@ -151,33 +218,62 @@ ui <- fluidPage(
        Bigger nodes represent larger gene sets.  
        Thicker edges represent more overlapped genes.")               		   
         )
-        
-        ,tabPanel("Genes"
-                  , tableOutput("conversionTable")
-                  , downloadButton('downloadGeneInfo', 'Download')
-                  , h5("This table shows how your genes are converted to Ensembl gene IDs.")          
+ #---Genes-----------------------------------------------------------        
+        ,tabPanel("KEGG"
+                 ,h5("Select KEGG pathways in the left to display your genes in pathway diagrams. Selected species only. Takes 1-3 minutes.")
+                 ,conditionalPanel("input.selectGO == 'KEGG'", 
+                                   htmlOutput('listSigPathways')
+                                   ,br(),br(),imageOutput("KeggImage", width = "100%", height = "100%")				
+                                   ,br(),br()	 
+                 )
+
+      
         )
-        
+ #---Genes-----------------------------------------------------------        
+        ,tabPanel("Genes"
+                  , downloadButton('downloadGeneInfo', 'Download')
+                  , tableOutput("conversionTable")
+      
+        )
+ #---Groups-----------------------------------------------------------        
         ,tabPanel("Groups"
-                  , tableOutput("grouping")
                   , downloadButton('downloadGrouping', 'Download')
-                  , h5("If Gene Ontology is chosen, your genes are grouped by functional categories defined by high-level GO terms. ")          
-        ) 
+                  , h5("If Gene Ontology is chosen, your genes are grouped by functional categories defined by high-level GO terms. ")  
+                  , tableOutput("grouping")
         
+        ) 
+ #---Plots-----------------------------------------------------------        
         ,tabPanel("Plots"
                   , h5("The characteristics of your genes are compared with the rest in the genome. Chi-squared and Student's 
               t-tests are run to see if your genes have special characteristics when compared with all the other genes or, if uploaded, a customized background.")
                   , plotOutput("genePlot", inline = TRUE,width='auto',height='auto')
                   , plotOutput("genePlot2", inline = TRUE,width='auto',height='auto')  
         )
-        
+
+ #---Genome-----------------------------------------------------------        
         ,tabPanel("Genome"
-                  , h5("Your genes are marked in each of the chromosomes. 
-                Note that the scale for each chromosomes are different.")
-                  , plotOutput("genomePlot", width = "100%")  
-                  
+                  , h5("The genes are represented by red dots. The purple lines indicate regions where these genes are statistically enriched, compared to the density of genes in the background. We scanned the genome with a sliding window. Each window is further divided into several equal-sized steps for sliding. Within each window we used the hypergeometric test to determine if the presence of your genes are significant. Essentially, the genes in each window define a gene set/pathway, and we carried out enrichment analysis. The chromosomes may be only partly shown as we use the last gene's location to draw the line. Mouse over to see gene symbols. Zoom in regions of interest.")
+                  ,plotlyOutput("genomePlotly",height = "900px")
+                  ,fluidRow(
+                    column(3, selectInput(inputId = "MAwindowSize",
+                                           label = h5("Window Size(Mb)"),
+                                           selected = 6,
+                                           choices = c(1, 2, 4, 6, 8, 10, 15, 20) ))
+                    ,column(3, selectInput(inputId = "MAwindowSteps",
+                                           label = h5("Steps in a window"),
+                                           selected = 2,
+                                           choices = c(1, 2, 3, 4)))
+                    ,column(3, selectInput(inputId = "chRegionPval", 
+                                           label = h5("FDR cutoff for windows"),
+                                           selected = 0.00001,
+                                           choices = c(0.1, 0.05, 0.01, 0.001, 0.0001, 0.00001, 0.000001))))
+                  ,fluidRow(  
+                     column(4, checkboxInput("labelGeneSymbol", "Label genes", value = FALSE) )
+                     ,column(4, checkboxInput("ignoreNonCoding", "Coding genes only", value = TRUE) )  
+                    ,column(4, actionButton("gPlotstatic", "Static plot") ) )                
         )
-        
+
+ #---Genome-----------------------------------------------------------                
         ,tabPanel("Promoter", 
                   radioButtons("radio", label = NULL, choices = list("Upstream 300bp as promoter" = 300, 
                                                                      "Upstream 600bp as promoter" = 600),selected = 300),
@@ -189,6 +285,7 @@ ui <- fluidPage(
               your list.")
                   
         )  
+ #---STRING-----------------------------------------------------------
         ,tabPanel("STRING", 
                   h5("Your genes are sent to STRING-db website for enrichment analysis 
             and retrieval of a protein-protein network. We tries 
@@ -221,6 +318,8 @@ ui <- fluidPage(
                   ,tableOutput("stringDB_GO_enrichment")		
                   
         )	
+
+ #---?-----------------------------------------------------------
         ,tabPanel("?"
                   ," For feedbacks, please"
                   ,a("contact us, ",href="mailto:gelabinfo@gmail?Subject=ShinyGO" )
@@ -235,6 +334,10 @@ ui <- fluidPage(
                   ,"Ge SX, Jung D & Yao R,", a(" Bioinformatics 2020", href="https://doi.org/10.1093/bioinformatics/btz931", target="_blank")
                   ,br(),br()
                   ,strong("Previous versions (still functional):")
+                  ,br()
+                  ,a("ShinyGO V0.65, "
+                     , href="http://bioinformatics.sdstate.edu/go65/")
+                  ,"based on database derived from Ensembl Release 103, archived on Oct. 15, 2021"
                   ,br()
                   ,a("ShinyGO V0.61, "
                      , href="http://bioinformatics.sdstate.edu/go61/")
@@ -335,61 +438,36 @@ ui <- fluidPage(
                
       )# bsModal 2
       
-      ,bsModal("BackgroundGenes", "Customized background genes (Optional; It can takes 5 minutes)", "backgroundGenes", size = "large"
+      ,bsModal("BackgroundGenes", "Customized background genes (Highly recommended)", "backgroundGenes", size = "large"
                ,tags$textarea(id = 'input_text_b', 
                               placeholder = 'Paste all genes from which the gene list is derived. These are all genes whose expression or other activity that you measured. This could be all the genes on a special DNA microarray or all the genes detected by a proteomics experiment. 
                     ', rows = 15, "")  
                ,h4("By default, we compare your gene list with a background of all protein-coding genes in the genome.
      		         When your genes are not selected from genome-wide data, customized background genes might yield more accurate 
 		             results for enrichment analysis. For gene lists derived from a typical RNA-seq dataset, 
-                     many people use the subset of genes with detectable expression, typically the genes passed a filter. 
+                     many  use the subset of genes with detectable expression, typically the genes passed a minimum filter. 
                       We can also customize background genes to overcome bias in selection. Currently only less than 30,000 genes are accepted.
 		              ")
                
-      ),# bsModal 3	
+      )# bsModal 3	
       
-      bsModal(id = "geneIDBs", title = "Gene ID Examples",
-              trigger = "geneIdButton", size = "large",
-              fluidPage(shinyjs::useShinyjs(),
-                        sidebarLayout(fluid = TRUE,
-                                      sidebarPanel(#Side panel
-                                        #see server updateSelectizeInput 
-                                        selectizeInput(inputId = "userSpecie",
-                                                       label = "What's your specie name?", choices = NULL),
-                                        shiny::tags$h5("Can erase and type in box"),
-                                        
-                                        #see server updateSelectizeInput
-                                        selectizeInput(inputId = "userIDtype",
-                                                       label = "What's your ID type? (Optional)", choices = NULL),
-                                        shiny::tags$h5("Can erase and type in box"),
-                                        actionButton(inputId = "submitIDPage", label = "submit"),
-                                        actionButton(inputId = "resetIDPage", label = "reset"),
-                                        downloadButton(outputId = "downloadIDPage", label = "Download mapping.csv")
-                                      ),##End of side panel
-                                      mainPanel(reactable::reactableOutput(outputId = "tableResult"),
-                                                ##Instructions for the user
-                                                shiny::tags$div(
-                                                  shiny::tags$h1("Instructions for Usage"),
-                                                  shiny::tags$h4("This page's purpose is to give the user some interactive tools to look at our database IDs.
-                               There are two different uses for this page, see explanation below:"),
-                                                  shiny::tags$ul(
-                                                    shiny::tags$li(#Bullet point 1
-                                                      shiny::tags$h4("If you only pick a species,
-                                       you are receiving table with all the different IDs
-                                       related to that species. (Showen below)")
-                                                    ),#end of bullet point 1
-                                                    shiny::tags$li(#Bullet point 2
-                                                      shiny::tags$h4("If you pick a species and an ID type,
-                                       a table with all the IDs of the ID type you pick and how they map to ensembl IDs(our preferred ID database)
-                                       , and you can download a csv file of the mapping ID.")
-                                                    )#end of bullet point 2
-                                                  )#end of ul
-                                                ), ##End of instructions
-                                                reactable::reactableOutput(outputId = "tableDefault")
-                                      )##End of main panel
-                        )#END of sidebarLayout
-              )) #end of gene id ui
-      
+      ,bsModal("geneIDexamples", "What the gene IDs in our database look like?", "MGeneIDexamples", size = "large"
+               ,selectizeInput(inputId = "userSpecieIDexample",
+                               label = "Select or search for species", choices = NULL)
+               ,tableOutput("showGeneIDs4Species")
+
+       )# bsModal 4	
+
+      ,bsModal("orgInfoButton", "Supported species (Search by common and scientific names, or NCBI taxonomy IDs)", "MorgInfo", size = "large"
+               ,DT::dataTableOutput('orgInfoTable')
+
+       )# bsModal 5	
+      ,bsModal("genomePlotStaticButton", "Static genome plot", "gPlotstatic", size = "large"
+                  , h5("Your genes are marked in each of the chromosomes. 
+                Note that the scale for each chromosomes are different.")
+                  , plotOutput("genomePlot", width = "100%")  
+
+       )# bsModal 6	      
     ) # mainPanel
   ) #sidebarLayout
   ,tags$head(includeScript("google_analytics.js")) # tracking usage

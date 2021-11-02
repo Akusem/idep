@@ -14,12 +14,16 @@ server <- function(input, output, session){
   
   observe({  updateSelectizeInput(session, "selectOrg", choices = speciesChoice, selected = speciesChoice[1] )      })
   
+  # for gene ID example
+  observe({  updateSelectizeInput(session, "userSpecieIDexample", choices = speciesChoice, selected = speciesChoice[1] )      })  
   # load demo data when clicked
   observe({ 
-    if( input$useDemo ) {
-      updateTextInput(session, 'input_text', value = ExampleGeneList )
+    if( input$useDemo1 ) {
+      updateTextInput(session, 'input_text', value = ExampleGeneList1 )
     }
-    
+   # if( input$useDemo2 ) {
+   #   updateTextInput(session, 'input_text', value = ExampleGeneList2 )
+   # }    
   })
   
   # update species for STRING-db related API access
@@ -45,15 +49,22 @@ server <- function(input, output, session){
     
   } )
   
+  detailedGeneInfoLookup <- reactive({
+    if (input$goButton == 0)    return()
+    geneInfoDetails(converted(),input$selectOrg )   # uses converted gene ids thru converted() call
+    
+  } )
   # this defines an reactive object that can be accessed from other rendering functions
   converted_background <- reactive({
-    if (input$goButton == 0 | is.null(input$input_text_b))    return()
+    if (input$goButton == 0 | is.null(input$input_text_b))    return() 
+    if (nchar(input$input_text_b) > 10)    return() 
     
     convertID(input$input_text_b,input$selectOrg );
     
   } )
   geneInfoLookup_background <- reactive({
-    if (input$goButton == 0 | is.null(input$input_text_b))    return()
+    if (input$goButton == 0 | nchar(input$input_text_b) > 10)    return()
+    if(is.null( converted_background() )) return()
     geneInfo(converted_background(),input$selectOrg )   # uses converted gene ids thru converted() call
     
   } )
@@ -68,14 +79,15 @@ server <- function(input, output, session){
       withProgress(message= sample(quotes,1),detail="enrichment analysis", {
         #gene info is passed to enable lookup of gene symbols
         tem = geneInfoLookup(); tem <- tem[which( tem$Set == "List"),]
-        temb = geneInfoLookup_background(); temb <- temb[which( temb$Set == "List"),]  	  
+        temb = geneInfoLookup_background(); 
+        if(class(temb) == "data.frame")
+          temb <- temb[which( temb$Set == "List"),]  	  
         FindOverlap( converted(), tem, input$selectGO, input$selectOrg, input$minFDR, input$maxTerms, 
                      converted_background(), temb )
       })
     })
   })
-  
-  
+    
   output$species <-renderTable({
     if (input$goButton == 0)    return()
     tem = input$selectGO; tem=input$selectOrg; tem=input$minFDR
@@ -89,7 +101,22 @@ server <- function(input, output, session){
       
     }) # avoid showing things initially
   }, digits = -1,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+ 
+  output$showGeneIDs4Species <-renderTable({
+    if (input$userSpecieIDexample == 0)    return()
+      withProgress(message="Retrieving gene IDs (2 minutes)", {
+          geneIDs <- showGeneIDs(species = input$userSpecieIDexample, nGenes = 10)
+        incProgress(1, detail = paste("Done"))	  })
+      geneIDs
+  }, digits = -1,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
   
+ output$orgInfoTable <- DT::renderDataTable({
+
+     df <- orgInfo[, c("ensembl_dataset", "name", "totalGenes")]
+     colnames(df) <- c("Ensembl/STRING-db ID", "Name (Assembly)", "Total Genes")
+     row.names(df) <- NULL
+     df
+  })
   
   promoterData <-reactive({
     if (input$goButton == 0)    return()
@@ -126,13 +153,22 @@ server <- function(input, output, session){
     if (input$goButton == 0)    return()   # still have problems when geneInfo is not found!!!!!
     tem = input$selectGO; tem=input$selectOrg; tem=input$minFDR
     isolate( {
+
+    withProgress(message= sample(quotes,1),detail="Looking up gene Info", {
       tem <- converted();
+      incProgress(0.1)
       tem2 <- geneInfoLookup()
+      incProgress(0.3)
+      tem3 <- detailedGeneInfoLookup()   
+      incProgress(0.6)   
       if( is.null(tem)) {as.data.frame("ID not recognized.")} else {
-        if(dim(tem2)[1] == 1) { tem$conversionTable }
+        if(dim(tem2)[1] == 1) { return( tem$conversionTable) }
         else { # if gene info is not available
           merged <- merge(tem$conversionTable,tem2,by='ensembl_gene_id')
-          merged <- subset(merged,select=c(User_input,ensembl_gene_id,symbol,gene_biotype,Species,chromosome_name,start_position  ))
+          if(!is.null(tem3))
+             merged <- merge(merged, tem3, by='ensembl_gene_id', all.x = TRUE)
+          merged <- subset(merged,select=c(User_input,symbol,ensembl_gene_id,entrezgene_id, 
+                                           gene_biotype,Species,chromosome_name,start_position, Description  ))
           
           tem3 <- as.data.frame(tem$originalIDs); colnames(tem3) = "User_input"
           merged <- merge(merged, tem3, all=T)
@@ -143,12 +179,17 @@ server <- function(input, output, session){
                                   merged$start_position                                                
           ), ]
           merged$start_position <- merged$start_position/1e6
-          colnames(merged) <- c("User ID", "Ensembl Gene ID", "Symbol",
-                                "Gene Type", "Species", "Chr", "Position (Mbp)" )
+          colnames(merged) <- c("Pasted","Symbol", "Ensembl Gene ID",  "Entrez",
+                                "Gene Type", "Species", "Chr", "Position (Mbp)", "Description" )
           i = 1:dim(merged)[1]
           merged = cbind(i,merged)
+
+
         }
       }
+      incProgress(0.9)
+      return(merged)
+      })
     }) # avoid showing things initially
   })
   
@@ -156,10 +197,36 @@ server <- function(input, output, session){
     if (input$goButton == 0)    return()   # still have problems when geneInfo is not found!!!!!
     
     isolate( {
-      conversionTableData()
+      df <- conversionTableData()
+
+      # first see if it is Ensembl gene ID-----------------------
+      ix <- grepl("ENS", df$'Ensembl Gene ID')  
+      if(sum(ix) > 0) { # at least one has http?
+        tem <- paste0("<a href='http://www.ensembl.org/id/", 
+                      df$'Ensembl Gene ID',
+                      "' target='_blank'>",
+                      df$'Ensembl Gene ID', 
+                      "</a>" )
+        # only change the ones with URL
+        df$'Ensembl Gene ID'[ix] <- tem[ix]
+      }
+      # first see if it is Ensembl gene ID-----------------------
+      ix <- !is.na(as.numeric( df$Entrez) ) 
+      if(sum(ix) > 0) { # at least one has http?
+        tem <- paste0("<a href='https://www.ncbi.nlm.nih.gov/gene/", 
+                      df$Entrez,
+                      "' target='_blank'>",
+                      df$Entrez, 
+                      "</a>" )
+        # only change the ones with URL
+        df$Entrez[ix] <- tem[ix]
+      
+     }
+     return(df)
       
     }) # avoid showing things initially
-  }, digits = 4,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+  }, digits = 4,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T,
+    sanitize.text.function = function(x) x)
   
   
   output$downloadGeneInfo <- downloadHandler(
@@ -172,22 +239,47 @@ server <- function(input, output, session){
   output$EnrichmentTable <-renderTable({
     if (input$goButton == 0  )    return(NULL)
     tem <- input$input_text_b; # just to make it re-calculate if user changes background
-    
-    myMessage = "Those genes seem interesting! Let me see what I can do.
-	   I am comparing your query genes to all 1000+ types of IDs across 5000 species.
-	  This can take up to 3 years. "
+
+    myMessage = "Analyzing genes."
+
     if(is.null(significantOverlaps() )  ) return(NULL)
-    # this solves an error when there is no signficant enrichment
+    # this solves an error when there is no significant enrichment
+
     if(ncol(significantOverlaps()$x ) ==1 ) return(significantOverlaps()$x)	
     
     withProgress(message= sample(quotes,1),detail=myMessage, {
-      tem <- significantOverlaps();
-      tem$x[, 3] <- as.character(tem$x[, 3]) # convert total genes into character 10/21/19
+      pathways <- significantOverlaps()$x;
+
+      if(input$SortPathways == "Sort by FDR")
+           pathways <- pathways[order(pathways[, 1]), ] 
+      if(input$SortPathways == "Sort by Fold Enrichment")
+           pathways <- pathways[order(pathways[, 4], decreasing = TRUE), ] 
+      if(input$SortPathways == "Sort by Genes")
+           pathways <- pathways[order(pathways[, 2], decreasing = TRUE), ]  
+      if(input$SortPathways == "Sort by Category Name")
+           pathways <- pathways[order( pathways[, 5]), ]  
+
+      pathways$Pathway <- hyperText(pathways$Pathway, pathways$URL )
+      
+      pathways <- pathways[, -7]
+      #rownames(pathways) <- NULL
+      #pathways[, 1] <- as.numeric( format(pathways[, 1], scientific = TRUE, digits = 3 ) )
+      pathways[, 4] <- as.character( round(pathways[, 4], 1))
+      pathways[, 2] <- as.character(pathways[, 2]) # convert total genes into character 10/21/19
+      pathways[, 3] <- as.character(pathways[, 3]) # convert total genes into character 10/21/19
+      colnames(pathways)[5] <- "Pathways (click for details)"
       incProgress(1, detail = paste("Done"))	  })
-    
-    if(dim(tem$x)[2] >1 ) tem$x[,2] <- as.character(tem$x[,2])
-    if(dim(tem$x)[2] ==1 ) tem$x else tem$x[,1:4]  # If no significant enrichment found x only has 1 column.
-  }, digits = -1,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+
+    if(dim(pathways)[2] >1 ) pathways[,2] <- as.character(pathways[,2])
+
+    if(dim(pathways)[2] ==1 ) return(pathways) else return(pathways[,1:5])  # If no significant enrichment found x only has 1 column.
+  }, digits = -1, 
+     spacing="s", 
+     striped=TRUE,
+     bordered = TRUE, 
+     width = "auto",
+     hover=TRUE, 
+     sanitize.text.function = function(x) x )
   
   significantOverlaps2 <- reactive({
     if (input$goButton == 0  )    return()
@@ -196,7 +288,8 @@ server <- function(input, output, session){
     tem <- significantOverlaps();
     if(dim(tem$x)[2] ==1 ) return(NULL)
     tem <- tem$x;
-    colnames(tem) = c("adj.Pval","nGenesList","nGenesCategor","Pathways","Genes")
+    colnames(tem) = c("adj.Pval","nGenesList","nGenesCategor","Fold", "Pathways","URL","Genes")
+    tem$Pathways <- gsub(".*'_blank'>|</a>", "", tem$Pathways) # remove URL
     tem$Direction ="Diff"	
     tem
   })
@@ -209,7 +302,8 @@ server <- function(input, output, session){
     tem <- significantOverlaps();
     if(dim(tem$x)[2] ==1 ) return(NULL)
     tem <- tem$x;
-    colnames(tem) = c("adj.Pval","nGenesList","nGenesCategor","Pathways","Genes")
+    colnames(tem) = c("adj.Pval","nGenesList","nGenesCategor","Fold","Pathways","URL","Genes")
+    tem$Pathways <- gsub(".*'_blank'>|</a>", "", tem$Pathways) # remove URL
     if(input$wrapTextNetwork)
       tem$Pathways <- wrap_strings( tem$Pathways ) # wrap long pathway names using default width of 30 10/21/19
     
@@ -224,7 +318,9 @@ server <- function(input, output, session){
     tem <- significantOverlaps();
     if(dim(tem$x)[2] ==1 ) return(NULL)
     tem <- tem$x;
-    colnames(tem) = c("adj.Pval","nGenesList","nGenesCategor","Pathways","Genes")
+    colnames(tem) = c("adj.Pval","nGenesList","nGenesCategor", "Fold", "Pathways","URL","Genes")
+    tem$Pathways <- gsub(".*'_blank'>|</a>", "", tem$Pathways) # remove URL
+
     if(input$wrapTextNetworkStatic)
       tem$Pathways <- wrap_strings( tem$Pathways ) # wrap long pathway names using default width of 30 10/21/19
     
@@ -266,7 +362,7 @@ server <- function(input, output, session){
   # note the same code is used twice as above. They need to be updated together!!!	  
   output$enrichmentNetworkPlotInteractive <- renderVisNetwork({
     if(is.null(significantOverlaps3())) return(NULL)
-    
+
     g <- enrichmentNetwork(significantOverlaps3(),layoutButton = input$layoutButton, edge.cutoff = input$edgeCutoff )
     data1 <- toVisNetworkData(g)
     
@@ -1121,7 +1217,96 @@ server <- function(input, output, session){
     }) #isolate
   }, width=700,height = 3000)
   
-  
+  output$enrichChart <- renderPlot({
+    if (input$goButton == 0  )    return()
+
+    if(is.null(significantOverlaps() )  ) return(NULL)
+    if(ncol(significantOverlaps()$x ) == 1 ) return(NULL) # no significant ones found.
+    tem=input$selectOrg; tem = input$SortPathwaysPlot
+    tem = input$SortPathwaysPlotX  
+    tem = input$SortPathwaysPlotSize
+    tem = input$SortPathwaysPlotColor
+    tem = input$SortPathwaysPlotFontSize
+    tem = input$SortPathwaysPlotMarkerSize
+    tem = input$SortPathwaysPlotHighColor
+    tem = input$SortPathwaysPlotLowColor
+    tem = input$enrichChartType
+
+    isolate( {
+ 
+        goTable <- significantOverlaps()$x[, 1:5]
+
+        # Remove spaces in col names
+        colnames(goTable) <- gsub(" ","", colnames(goTable))
+
+        x       = input$SortPathwaysPlotX  
+        size    = input$SortPathwaysPlotSize
+        colorBy = input$SortPathwaysPlotColor
+        fontSize = input$SortPathwaysPlotFontSize
+        markerSize = input$SortPathwaysPlotMarkerSize
+        # validate values; users can input any numeric value outside the range
+        if(fontSize < 1 | fontSize >= 20 ) 
+           fontSize <- 12
+         if(markerSize < 0 | markerSize > 20 ) 
+           markerSize <- 4
+       
+        # convert to vector so that we can look up the readable names of columns 
+        columns <- unlist(columnSelection)
+        
+        goTable$EnrichmentFDR = -log10(goTable$EnrichmentFDR)
+        ix <- which(colnames(goTable) == input$SortPathwaysPlot)
+
+        # sort the pathways
+        if(ix >0 && ix < dim(goTable)[2])
+            goTable <- goTable[order(goTable[, ix], decreasing = TRUE), ]
+        # convert to factor so that the levels are not reordered by ggplot2
+        goTable$Pathway <- factor(goTable$Pathway, levels = rev(goTable$Pathway) )                  
+
+        p <- ggplot(goTable, aes_string(x=x, y="Pathway", size=size, color=colorBy)) +
+               geom_point() +
+               scale_color_continuous(low=input$SortPathwaysPlotLowColor, 
+                                      high=input$SortPathwaysPlotHighColor, 
+                                      name = names(columns)[columns == colorBy],
+                                      guide=guide_colorbar(reverse=TRUE)) +
+               scale_size(range=c(1, markerSize)) +
+               xlab( names(columns)[columns == x]  ) +
+               ylab(NULL) + 
+               guides(size  = guide_legend(order = 2, title = names(columns)[columns == size]), 
+                      color = guide_colorbar(order = 1)) +
+               theme(axis.text=element_text( size = fontSize) ) 
+
+        if(input$enrichChartType == "dotplot") {
+          p <- p 
+        } else if(input$enrichChartType == "lollipop") {
+          p <- p + 
+                 geom_segment(aes_string(x = 0, 
+                                            xend = x, 
+                                            y = "Pathway", 
+                                            yend = "Pathway"),
+                                  size=1) 
+        } else if(input$enrichChartType == "barplot") {
+          p <- ggplot(goTable, aes_string(x=x, y="Pathway", fill=colorBy)) +
+               geom_col(width = 0.8, position = position_dodge(0.7)) +
+               scale_fill_continuous(low=input$SortPathwaysPlotLowColor, 
+                                      high=input$SortPathwaysPlotHighColor, 
+                                      name = names(columns)[columns == colorBy],
+                                      guide=guide_colorbar(reverse=TRUE)) +
+               xlab( names(columns)[columns == x]  ) +
+               ylab(NULL) + 
+               theme(axis.text=element_text( size = fontSize) ) 
+
+        }    
+        
+
+
+         p 
+          
+
+
+    }) #isolate
+    
+  } ) #,height = 800,height=400
+    
   output$listSigPathways <- renderUI({
     tem = input$selectOrg
     if (input$goButton == 0 | is.null(significantOverlaps())) return(NULL)
@@ -1129,8 +1314,8 @@ server <- function(input, output, session){
     tem <- significantOverlaps();
     
     if(dim(tem$x)[2] ==1 ) return(NULL)  
-    choices = tem$x[,4]		
-    selectInput("sigPathways", label="Select a KEGG pathway to show diagram with query genes highlighted in red:"
+    choices = tem$x[,5]		
+    selectInput("sigPathways", label="Select a significant KEGG pathway to show diagram with your genes highlighted in red:"
                 ,choices=choices)      
   })
   
@@ -1614,11 +1799,11 @@ server <- function(input, output, session){
       withProgress(message="Rendering KEGG pathway plot", {
         incProgress(1/5, "Loading the pathview package") 
         
-        fold = rep(1, length(converted()$IDs))
-        names(fold) <- converted()$IDs
+
         Species <- converted()$species[1,1]
-        fold <- convertEnsembl2Entrez(fold,Species)
-        
+        fold <- convertEnsembl2Entrez(converted()$IDs,  Species)
+
+        fold <- fold$entrezgene_id  
         keggSpecies <- as.character( keggSpeciesID[which(keggSpeciesID[,1] == Species),3] )
         
         if(nchar( keggSpecies) <=2 ) return(blank) # not in KEGG
@@ -1648,14 +1833,236 @@ server <- function(input, output, session){
     })
   }, deleteFile = TRUE)
   
-  ############################################
-  #Purpose: this logic for second tab i.e. Gene ID Examples
-  #File: gene_id_page_ser.R
-  ############################################
-  observeEvent(input$geneIdButton, {
-    source('gene_id_page_ser.R') #load server logic and functions for Gene ID popup
-    geneIDPage(input = input, output = output,
-               session = session, orgInfo = orgInfo, path = datapath)
-  })
+# visualizing fold change on chrs. 
+output$genomePlotly <- renderPlotly({
+        if (input$goButton == 0  )    return()
+		if(is.null(geneInfoLookup))   return()
+		tem = input$selectOrg ; 
+		tem = input$MAwindowSize
+        tem = input$MAwindowSteps
+        tem = input$MAwindowCutoff
+        tem = input$ignoreNonCoding
+        tem = input$chRegionPval
+        tem = input$labelGeneSymbol
+        library(dplyr)
+		####################################
+		
+	  isolate({ 
+		withProgress(message=sample(quotes,1), detail ="Visualzing expression on the genome", {
+		# default plot
+		fake = data.frame(a=1:3,b=1:3)
+		p <- ggplot(fake, aes(x = a, y = b)) +
+							 geom_blank() + ggtitle("No genes with position info.") +
+							 theme(axis.title.x=element_blank(),axis.title.y=element_blank())
+
+        x = geneInfoLookup()
+
+        #Background genes ---------------
+        xB = geneInfoLookup_background()
+        convertedB = converted_background()	   
+        if(!is.null(xB) && 
+           !is.null(convertedB) && 
+           length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
+          
+          x <- x[ x$Set == "List", ] # remove background from selected genes
+          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
+          xB$Set <- "Genome"
+          x <- rbind(x, xB)
+        }
+        # end background genes ------------
+        
+        # only coding genes? 
+        if(input$ignoreNonCoding) {
+          x <- subset(x, gene_biotype == "protein_coding")
+        }
+  
+        x$Fold <- 0
+        ix <- which(x$Set == "List")
+        x$Fold[ix] <- 1
+
+        incProgress(0.1)
+		 # if no chromosomes found. For example if user do not convert gene IDs.
+		 if( dim(x)[1] >5  ) { 
+           
+           x <- x[order(x$chromosome_name,x$start_position),]
+  
+           x$ensembl_gene_id <- as.character( x$ensembl_gene_id)
+   
+           # if symbol is missing use Ensembl id
+           x$symbol = as.character(x$symbol)  
+           ix = which(is.na(x$symbol))
+           ix2 = which(nchar(as.character(x$symbol))<= 2 )
+           ix3 = which( duplicated(x$symbol))
+           ix = unique( c(ix,ix2,ix3))
+           x$symbol[ix] <- x$ensembl_gene_id[ix] 
+
+           x = x[!is.na(x$chromosome_name),]
+           x = x[!is.na(x$start_position),]
+
+            tem = sort( table( x$chromosome_name), decreasing=T)
+             ch <- names( tem[tem >= 1 ] )  # ch with less than 100 genes are excluded
+             if(length(ch) > 50) ch <- ch[1:50]  # at most 50 ch
+             ch <- ch[ nchar(ch)<=12] # ch. name less than 10 characters
+             ch = ch[order(as.numeric(ch) ) ]
+             tem <- ch
+             ch <- 1:(length(ch))  # the numbers are continous from 1 to length(ch)
+             names(ch) <- tem  # the names are real chr. names
+
+
+             x <- x[which(x$chromosome_name %in% names(ch)),]
+             x <- droplevels(x)
+
+             x$chNum <- 1 # numeric encoding
+             x$chNum <- ch[ x$chromosome_name ]
+
+            # add chr. numer 
+            # use max position as chr. length   before filtering
+             chLengthTable = aggregate(start_position ~ chromosome_name, data=x, max )
+             chLengthTable$chNum <-  ch[ chLengthTable$chromosome_name ]
+             chLengthTable <- chLengthTable[!is.na( chLengthTable$chNum ), ]
+             chLengthTable <- chLengthTable[order(chLengthTable$chNum), c(3,2)]
+             chLengthTable <- chLengthTable[order(chLengthTable$chNum), ]       
+             chLengthTable$start_position <- chLengthTable$start_position/1e6
+
+           chTotal = dim(chLengthTable)[1]
+           x0 <- x   # keep a copy
+           x <- subset(x, Set == "List")
+           if (dim(x)[1] > 5) { 
+
+             # remove nonsignificant / not selected genes
+ 
+ 
+
+              # prepare coordinates
+             x$start_position = x$start_position/1000000 # Mbp
+             chD = 30 # distance between chs.
+    
+             # y is scalled and also jittered with random number to avoid overlap
+             x$y = x$chNum*chD + 4 + runif(dim(x)[1]) * 6
+
+
+    
+             colnames(x)[ which(colnames(x) == "start_position")] = "x"
+
+             incProgress(0.3)
+             # plotting ----------------------------------
+
+                p <- ggplot() +  # don't define x and y, so that we could plot use two datasets
+                     geom_point(data = x, aes(x = x, y = y, text = symbol), 
+                                colour = "red", shape = 20, size = .3 )  
+                if(input$labelGeneSymbol)
+                     p <- p + geom_text(data = x, aes(x = x, y = y, label = symbol),
+                                check_overlap = FALSE, angle = 45, size = 2, vjust = 0, nudge_y = 4 )
+
+             #label y with ch names
+             p <- p +  scale_y_continuous(labels = paste("chr", names(ch[chLengthTable$chNum]),sep=""), 
+                                          breaks = chD* (1:chTotal), 
+                                          limits = c(0, chD*(chTotal + 1) + 5) )
+             # draw horizontal lines for each ch.
+             for( i in 1:dim(chLengthTable)[1] )
+               p = p+ annotate( "segment",x = 0, xend = chLengthTable$start_position[i],
+                                y = chLengthTable$chNum[i]*chD, yend = chLengthTable$chNum[i]*chD)
+
+             p <- p + xlab("Position on chrs. (Mbp)") +  theme(axis.title.y=element_blank())      
+             p <- p + theme(legend.position="none")
+
+             incProgress(0.5)
+
+
+             # add  lines------------------------------------------
+             x0 <- x0[x0$chromosome_name %in% unique(x$chromosome_name), ]
+             x0$chNum <- 1 # numeric encoding
+             x0$chNum <- ch[ x0$chromosome_name ]
+             x0$start_position = x0$start_position/1e6 # Mbp
+
+             windowSize = as.numeric( input$MAwindowSize )#Mb            
+             steps = as.numeric( input$MAwindowSteps ) # step size is then windowSize / steps       
+             cutoff <- as.numeric(input$MAwindowCutoff) 
+ 
+             totalN = dim(x0)[1]  # total genes
+             listN = dim(subset(x0, Set == "List"))[1]  # genes in list
+             
+             for(i in 0:(steps-1)) {
+               #step size is  windowSize/steps   
+               # If windowSize=10 and steps = 2; then step size is 5Mb
+               # 1.3 becomes 5, 11.2 -> 15 for step 1
+               # 1.3 -> -5
+               x0$x <- ( floor((x0$start_position - i * windowSize / steps)/ windowSize )  
+                        + 0.5 + i / steps ) * windowSize
+
+               movingAverage1 <- x0 %>%
+                 select(chNum, x, Fold) %>%
+                 filter( x >= 0) %>%   # beginning bin can be negative for first bin in the 2nd step
+                 group_by(chNum, x) %>%
+                 summarize( n = n(), k = sum(Fold)) %>% 
+                 filter( k > 0) %>%
+                 filter( k / n > listN / totalN) %>%
+                 mutate(pval = phyper(k - 1,
+                                       n,
+                                       totalN - n,   
+                                       listN, 
+                                       lower.tail=FALSE )
+                       )
+
+               if(i == 0) {
+                 movingAverage <- movingAverage1
+               } else {
+                 movingAverage <- rbind(movingAverage, movingAverage1)  
+               }        
+             }
+ 
+            
+             # translate fold to y coordinates
+             movingAverage <- movingAverage %>%
+                filter(n >= 3) %>%
+                mutate( pval = p.adjust(pval, method = "fdr" ) ) %>%
+                filter( pval < as.numeric(input$chRegionPval) ) %>%
+                mutate(y = chNum * chD - 4 ) 
+
+              # significant regions are marked as horizontal error bars 
+             if(dim(movingAverage)[1] > 0) {
+               p <- p +
+                 geom_errorbarh(data = movingAverage, aes(x = x, 
+                                                          y = y, 
+                                                          xmin = x -windowSize/2, 
+                                                          xmax = x + windowSize/2), 
+                                 size = 2, 
+                                 height = 15,
+                                 colour = "purple" )
+ 
+                 # label significant regions
+                 sigCh <- sort(table(movingAverage$chNum), decreasing = TRUE)
+                 sigCh <- names(ch)[ as.numeric(names(sigCh)) ]
+                 if(length(sigCh) <= 5) { # more than 5 just show 5
+                   sigCh <- paste0("chr", sigCh, collapse = ", ")
+                 } else {
+                   sigCh <- sigCh[1:5]
+                   sigCh <- paste0("chr", sigCh, collapse = ", ")                  
+                   sigCh <- paste0(sigCh,", ...")
+                 }
+
+                 sigCh <- paste(dim(movingAverage)[1], 
+                                " enriched regions \n(",
+                                round( sum(chLengthTable$start_position) / windowSize * steps * as.numeric(input$chRegionPval), 2),
+                                          " expected)  detected on:\n ", sigCh)
+                 
+               p <- p + annotate(geom = "text", 
+                          x = max(x$x) * 0.70,
+                          y = max(x$y) * 0.90,
+                          label = sigCh)
+                      
+
+              }
+
+
+         } # have genes after filter
+			
+      }  # have 5+ genes to begin with
+              incProgress(1)
+	  ggplotly(p)
+    }) # progress
+  }) # isolate
+})
+
   
 }

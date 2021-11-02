@@ -3,7 +3,7 @@
 # hosted at http://ge-lab.org/idep/
 # manuscript: https://www.biorxiv.org/content/early/2018/04/20/148411 
 
-iDEPversion = "iDEP 0.94"
+iDEPversion = "iDEP 0.94"     
 
 ################################################################
 # R packages
@@ -22,7 +22,7 @@ library(e1071,verbose=FALSE) 		# computing kurtosis
 library(DT,verbose=FALSE) 		# for renderDataTable
 library(plotly,verbose=FALSE) 	# for interactive heatmap
 library(reshape2,verbose=FALSE) 	# for melt correlation matrix in heatmap
-
+library(visNetwork) # interative network graphs
 # Bioconductor packages
 #source("https://bioconductor.org/biocLite.R")
 #biocLite(c( "limma", "DESeq2","edgeR","gage", "PGSEA", "fgsea", "ReactomePA", "pathview","PREDA","PREDAsampledata","sfsmisc","lokern","multtest","dplyr"))
@@ -92,8 +92,8 @@ STRING_DB_VERSION <- "11.0" # what version of STRINGdb needs to be used
 
 # relative path to data files
 # datapath = "../../data/data104/"   # production server
-datapath = "/srv/data/"   # production server
-readPath = "/srv/data/testReadFolder"
+datapath = "/srv/data/data104/"   # production server
+readPath = "/srv/data/data104/testReadFolder"
 gmtFile = "KEGG_Phatr3.gmt"
 
 sqlite  <- dbDriver("SQLite")
@@ -647,26 +647,30 @@ matchedSpeciesInfo <- function (x) {
 }
 
 # convert gene IDs to ensembl gene ids and find species
-convertID <- function (query,selectOrg, selectGO) {
+# updated 10/15; some changes not included in Gavin's new version
+convertID <- function (query,selectOrg) {
 	querySet <- cleanGeneSet( unlist( strsplit( toupper(query),'\t| |\n|\\,')))
 	# querySet is ensgene data for example, ENSG00000198888, ENSG00000198763, ENSG00000198804
- 
-    if( selectOrg == "BestMatch") { # query all species
-	  querySTMT <- paste( "select distinct id,ens,species from mapping where id IN ('", paste(querySet,collapse="', '"),"')",sep="")
-    } else {  # organism has been selected query specific one
- 	  querySTMT <- paste( "select distinct id,ens,species from mapping where species = '",selectOrg,
-                          "' AND id IN ('", paste(querySet,collapse="', '"),"')",sep="")    
-    }
-	result <- dbGetQuery(convert, querySTMT)
-	if( dim(result)[1] == 0  ) return(NULL)
-	if(selectOrg == speciesChoice[[1]]) {
-		comb = paste( result$species,result$idType)
-		sortedCounts = sort(table(comb),decreasing=T)
+    querSetString <- paste0("('", paste(querySet,collapse="', '"),"')")
+	# ('ENSG00000198888', 'ENSG00000198763', 'ENSG00000198804')
+
+	if(selectOrg == speciesChoice[[1]]) {# if best match
+
+	  #First send a query to determine the species
+	  query_species <- paste0( "select species, idType, COUNT(species) as freq from mapping where id IN ", 
+	                      querSetString," GROUP by species,idType")
+	  species_ranked <- dbGetQuery(convert, query_species)
+
+	  if( dim(species_ranked)[1] == 0  ) return(NULL)	  	
+	  sortedCounts <- species_ranked$freq 
+	  names(sortedCounts) <- paste(species_ranked$species, species_ranked$idType)
+	  sortedCounts <- sort(sortedCounts, decreasing = TRUE)
+
 		# Try to use Ensembl instead of STRING-db genome annotation
-		if(class(sortedCounts) == "table") # if more than 1 species matched
-		if( sortedCounts[1] <= sortedCounts[2] *1.1  # if the #1 species and #2 are close
-			 && as.numeric(names(sortedCounts[1])) > sum( annotatedSpeciesCounts[1:3])  # 1:3 are Ensembl species
-			 && as.numeric(names( sortedCounts[2] )) < sum( annotatedSpeciesCounts[1:3])    ) { # and #2 come earlier (ensembl) than #1
+		if(length(sortedCounts) > 1) # if more than 1 species matched
+        if( sortedCounts[1] <= sortedCounts[2] *1.1  # if the #1 species and #2 are close
+             && as.numeric( gsub(" .*", "", names(sortedCounts[1]))) > sum( annotatedSpeciesCounts[1:3])  # 1:3 are Ensembl species
+             && as.numeric( gsub(" .*", "", names(sortedCounts[2]))) < sum( annotatedSpeciesCounts[1:3])    ) {
 		  tem <- sortedCounts[2]
 		  sortedCounts[2] <- sortedCounts[1]
 		  names(sortedCounts)[2] <- names(sortedCounts)[1]
@@ -674,19 +678,40 @@ convertID <- function (query,selectOrg, selectGO) {
 		  names(sortedCounts)[1] <- names(tem)    
 		} 
 		recognized =names(sortedCounts[1])
-		result <- result[which(comb == recognized),]
+		
 		speciesMatched=sortedCounts
-		names(speciesMatched )= sapply(as.numeric(gsub(" .*","",names(sortedCounts) ) ), findSpeciesByIdName  ) 
-		speciesMatched <- as.data.frame( speciesMatched )
+		speciesMatched <- as.data.frame( speciesMatched )	
+		orgName <- sapply(as.numeric(gsub(" .*","",names(sortedCounts) ) ), findSpeciesByIdName  )
+		speciesMatched <- cbind( orgName,  speciesMatched)
+
 		if(length(sortedCounts) == 1) { # if only  one species matched
-		speciesMatched[1,1] <-paste( rownames(speciesMatched), "(",speciesMatched[1,1],")",sep="")
+		   speciesMatched[1,1] <-paste( speciesMatched[1,1], "(",speciesMatched[1,2],")",sep="")
+		   speciesMatched <- speciesMatched[, 1, drop = FALSE]
 		} else {# if more than one species matched
+            speciesMatched <- speciesMatched[!duplicated(speciesMatched[, 1]), ] # same species different mapping (ensembl, arayexpress, hpa)
 			speciesMatched[,1] <- as.character(speciesMatched[,1])
 			speciesMatched[,1] <- paste( speciesMatched[,1]," (",speciesMatched[,2], ")", sep="") 
 			speciesMatched[1,1] <- paste( speciesMatched[1,1],"   ***Used in mapping***  To change, select from above and resubmit query.") 	
 			speciesMatched <- as.data.frame(speciesMatched[,1])
 		}
+
+	
+		querySTMT <- paste0("select distinct id,ens,species,idType from mapping where ",  
+		                    " species = '", gsub(" .*","", recognized), "'",
+		                    " AND idType = '", gsub(".* ","", recognized ), "'",
+		                    " AND id IN ", querSetString)
+		
+		result <- dbGetQuery(convert, querySTMT)
+		if( dim(result)[1] == 0  ) return(NULL)		
+		
+		
 	} else { # if species is selected
+
+	  querySTMT <- paste0( "select distinct id,ens,species,idType from mapping where species = '", selectOrg,
+	                      "' AND id IN ", querSetString) 
+	  result <- dbGetQuery(convert, querySTMT)
+
+	  if( dim(result)[1] == 0  ) return(NULL)
 		result <- result[which(result$species == selectOrg ) ,]
 		if( dim(result)[1] == 0  ) return(NULL) #stop("ID not recognized!")
 		speciesMatched <- as.data.frame(paste("Using selected species ", findSpeciesByIdName(selectOrg) )  )
@@ -696,30 +721,9 @@ convertID <- function (query,selectOrg, selectGO) {
 	colnames(speciesMatched) = c("Matched Species (genes)" ) 
 	conversionTable <- result[,1:2]; colnames(conversionTable) = c("User_input","ensembl_gene_id")
 	conversionTable$Species = sapply(result[,3], findSpeciesByIdName )
-	if(0){
-		# generate a list of gene set categories
-		ix = grep(findSpeciesById(result$species[1])[1,1],gmtFiles)
-		if (length(ix) == 0 ) {categoryChoices = NULL}
-		# If selected species is not the default "bestMatch", use that species directly
-		if(selectOrg != speciesChoice[[1]]) {  
-			ix = grep(findSpeciesById(selectOrg)[1,1], gmtFiles )
-			if (length(ix) == 0 ) {categoryChoices = NULL}
-			totalGenes <- orgInfo[which(orgInfo$id == as.numeric(selectOrg)),7]
-		}
-		pathway <- dbConnect(sqlite,gmtFiles[ix],flags=SQLITE_RO)
-		# Generate a list of geneset categories such as "GOBP", "KEGG" from file
-		geneSetCategory <-  dbGetQuery(pathway, "select distinct * from categories " ) 
-		geneSetCategory  <- geneSetCategory[,1]
-		categoryChoices <- setNames(as.list( geneSetCategory ), geneSetCategory )
-		categoryChoices <- append( setNames( "All","All available gene sets"), categoryChoices  )
-		#change GOBO to the full description for display
-		names(categoryChoices)[ match("GOBP",categoryChoices)  ] <- "GO Biological Process"
-		names(categoryChoices)[ match("GOCC",categoryChoices)  ] <- "GO Cellular Component"
-		names(categoryChoices)[ match("GOMF",categoryChoices)  ] <- "GO Molecular Function"
-		dbDisconnect(pathway)
-	} #if (0)
 
-	return(list(originalIDs = querySet,IDs=unique( result[,2]), 
+	return(list(originalIDs = querySet,
+                IDs=unique( result[,2]), 
 				species = findSpeciesById(result$species[1]), 
 				#idType = findIDtypeById(result$idType[1] ),
 				speciesMatched = speciesMatched,
@@ -807,8 +811,51 @@ geneInfo <- function (converted,selectOrg){
 	return( cbind(x,Set) )}
  }
 
+hyperText <- function (textVector, urlVector){
+  # for generating pathway lists that can be clicked.
+  # Function that takes a vector of strings and a vector of URLs
+  # and generate hyper text 
+  # add URL to Description 
+  # see https://stackoverflow.com/questions/30901027/convert-a-column-of-text-urls-into-active-hyperlinks-in-shiny
+  # see https://stackoverflow.com/questions/21909826/r-shiny-open-the-urls-from-rendertable-in-a-new-tab
+  if( sum(is.null(urlVector) ) == length(urlVector) )
+     return(textVector)
+ 
+  if(length(textVector) != length(urlVector))
+    return(textVector)
+
+  #------------------URL correction
+  # URL changed from http://amigo.geneontology.org/cgi-bin/amigo/term_details?term=GO:0000077 
+  #                  http://amigo.geneontology.org/amigo/term/GO:0000077
+  urlVector <- gsub("cgi-bin/amigo/term_details\\?term=", "amigo/term/", urlVector )
+  urlVector <- gsub(" ", "", urlVector )
+
+
+  # first see if URL is contained in memo
+  ix <- grepl("http:", urlVector, ignore.case = TRUE)  
+  if(sum(ix) > 0) { # at least one has http?
+    tem <- paste0("<a href='", 
+      urlVector, "' target='_blank'>",
+      textVector, 
+      "</a>" )
+    # only change the ones with URL
+    textVector[ix] <- tem[ix]
+  }
+  return(textVector)
+}
+
+removeHypertext <- function( df ){
+# Given data frame, remove hypertext in all columns
+  if(class(df) == "data.frame") {
+    for( i in 1:dim(df)[2])
+      if(is.character(df[, i]))
+        df[, i] <- gsub(".*'_blank'>|</a>", "", df[, i]) 
+    }
+  return(df)
+}
+
 # Main function. Find a query set of genes enriched with functional category
-FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, convertedData = NULL, useFilteredBackground = NULL) {
+FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, convertedDataBackground = NULL) {
     maxGenesBackground <- 30000
     minGenesBackground <- 2000
 	maxTerms =15 # max number of enriched terms
@@ -818,12 +865,15 @@ FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, 
 	if(is.null(converted) ) return(idNotRecognized) # no ID 
 	
     querySet <- converted$IDs
-    if(!is.null(gInfo) )
-        if(dim(gInfo)[1] > 1) {  # some species does not have geneInfo. STRING
-	# only coding
-	   querySet <- intersect( querySet, 
-                             gInfo[which( gInfo$gene_biotype == "protein_coding"),1] )
+
+  if(!is.null(gInfo) )
+     if( class(gInfo) == "data.frame" )
+       if(dim(gInfo)[1] > 1) {  # some species does not have geneInfo. STRING
+	     # only coding
+	     querySet <- intersect( querySet, 
+                                gInfo[which( gInfo$gene_biotype == "protein_coding"), 1] )
 	}
+
 	if(length(querySet) == 0) return(idNotRecognized )
 
 	ix = grep(converted$species[1,1],gmtFiles)
@@ -838,14 +888,17 @@ FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, 
 		if (length(ix) == 0 ) {return(idNotRecognized )}
 		totalGenes <- orgInfo[which(orgInfo$id == as.numeric(selectOrg)),7]
 	}
-	pathway <- dbConnect(sqlite,gmtFiles[ix],flags=SQLITE_RO)
-	
+
+	pathway <- dbConnect(sqlite,gmtFiles[ix],flags=SQLITE_RO)	
 		
-	sqlQuery = paste( " select distinct gene,pathwayID from pathway where gene IN ('", paste(querySet,collapse="', '"),"')" ,sep="")
-	
+  if( GO != "All") {
+     sqlQuery = paste( " select distinct gene,pathwayID from pathway where category='", GO, "'",
+                          " AND gene IN ('", paste(querySet, collapse="', '"),"')" ,sep="")
+   } else {
+     sqlQuery = paste( " select distinct gene,pathwayID from pathway where gene IN ('", 
+                        paste(querySet, collapse="', '"),"')" ,sep="")
+   }
 
-
-	if( GO != "All") sqlQuery = paste0(sqlQuery, " AND category ='",GO,"'")
 	result <- dbGetQuery( pathway, sqlQuery  )
 
 	if( dim(result)[1] ==0) {return(as.data.frame("No matching species or gene ID file!" )) }
@@ -855,20 +908,27 @@ FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, 
 		tem <- result[which(result[,2]== pathwayID ),1]
 		ix = match(tem, converted$conversionTable$ensembl_gene_id) # convert back to original
 		tem2 <- unique( converted$conversionTable$User_input[ix] )
-		#if(length(unique(gInfo$symbol) )/dim(gInfo)[1] >.7  ) # if 70% genes has symbol in geneInfo
-		#{ ix = match(tem, gInfo$ensembl_gene_id); 
-		#tem2 <- unique( gInfo$symbol[ix] )      }
-	return( paste( tem2 ,collapse=" ",sep="") )}
+        if(!is.null(gInfo) )
+          if( class(gInfo) == "data.frame")
+            if( dim(gInfo)[1] > 1)
+              if(length(unique(gInfo$symbol) )/dim(gInfo)[1] >.7  ) { # if 70% genes has symbol in geneInfo
+    	        ix = match(tem, gInfo$ensembl_gene_id);
+    	        tem2 <- unique( gInfo$symbol[ix] )      }
+	     return( paste( tem2 ,collapse=" ",sep="") )
+    }
 	
 	x0 = table(result$pathwayID)					
 	x0 = as.data.frame( x0[which(x0>=Min_overlap)] )# remove low overlaps
     errorMessage = as.data.frame("Too few genes.")
 	if(dim(x0)[1] <= 2 ) return(errorMessage) # no data
 	colnames(x0)=c("pathwayID","overlap")
-	pathwayInfo <- dbGetQuery( pathway, paste( " select distinct id,n,Description from pathwayInfo where id IN ('", 
+	pathwayInfo <- dbGetQuery( pathway, paste( " select distinct id,n,description,memo from pathwayInfo where id IN ('", 
 							paste(x0$pathwayID,collapse="', '"),   "') ",sep="") )
 	
+    # create hypertext
+    pathwayInfo$description <- hyperText(pathwayInfo$description, pathwayInfo$memo )
    
+    pathwayInfo <- subset( pathwayInfo, select = -c(memo))
 	x = merge(x0,pathwayInfo, by.x='pathwayID', by.y='id')
     
     # filtered pathways with enrichment ratio less than one
@@ -879,15 +939,16 @@ FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, 
 				as.numeric(x$n), 
 				lower.tail=FALSE );
     # further filter by P value; if Pval is big, we assume that using the background genes will not change that.
-    x <- subset(x, Pval < maxPvalFilter)
+    #x <- subset(x, Pval < maxPvalFilter)
 
 	  #Background genes----------------------------------------------------
 
-   if(!is.null(useFilteredBackground))
-  if( useFilteredBackground && 
-     length( row.names(convertedData) ) > minGenesBackground &&  # if too few genes, use all
-     length( row.names(convertedData) ) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
-        querySetB <- row.names(convertedData) # all genes in the converted GEnes  
+  if(!is.null(convertedDataBackground))
+  if( length( intersect( convertedDataBackground$IDs, querySet ) ) > 0.5 * length(querySet) &&  # Species matching? At least half of the query in background
+     length(convertedDataBackground$IDs) > minGenesBackground &&  # if too few genes, use all
+     length(convertedDataBackground$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
+     
+     querySetB <- convertedDataBackground$IDs # all genes in the converted GEnes  
      if(!is.null(gInfo) )
          if(dim(gInfo)[1] > 1) {  # some species does not have geneInfo. STRING
 	          # only coding
@@ -954,7 +1015,6 @@ FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, 
 				}								
 			x <- x[which(tem),]		
 		}
-		
 
 	}
 			
@@ -1129,12 +1189,6 @@ PGSEApathway <- function (converted,convertedData, selectOrg,GO,gmt, myrange,Pva
     }
  }
 
-if(0){ # for testing LIMMA
-	x = read.csv("C:/Users/Xijin.Ge/Google Drive/research/Shiny/RNAseqer/doc/Hoxa1-1/GSE50813_reduced.csv")
-	rownames(x) = x[,1]
-	x = x[,-1]
-	maxP_limma=.1; minFC_limma=2; rawCounts=NULL; countsDEGMethods=2;priorCounts=4; dataFormat=2;
-} 
 
 # Differential expression using LIMMA 
 DEG.limma <- function (x, maxP_limma=.1, minFC_limma=2, rawCounts,countsDEGMethods,priorCounts, dataFormat, selectedComparisons=NULL, sampleInfo = NULL,modelFactors=NULL, blockFactor = NULL){
@@ -2045,6 +2099,8 @@ enrichmentPlot <- function( enrichedTerms, rightMargin=33) {
 }
 
 
+
+
 # numChar=100 maximum number of characters
 # n=200  maximum number of nodes
 # degree.cutoff = 0    Remove node if less connected
@@ -2056,11 +2112,11 @@ enrich.net2 <-  function (x, gene.set, node.id, node.name = node.id, pvalue,
     }, node.size = function(x) {
         2.5 * log10(x)
     }, group = FALSE, group.color = c("green","red" ), group.shape = c("circle", 
-        "square"), legend.parameter = list("topright"), show.legend = TRUE, plotting=TRUE, layout_change=0,
-    ...) 
+        "square"), legend.parameter = list("topright"), show.legend = TRUE, plotting=TRUE, 
+    layoutButton = 0, ...) 
 {
 	library(igraph)
-	set.seed(layout_change)
+	set.seed(layoutButton)
     x <- data.frame(x, group)
     colnames(x)[length(colnames(x))] <- "Group"
     x <- x[as.numeric( x[, pvalue]) < pvalue.cutoff, ]
@@ -2118,7 +2174,7 @@ enrich.net2 <-  function (x, gene.set, node.id, node.name = node.id, pvalue,
     n <- min(nrow(x), n)
     x <- x[1:n, ]
     group.level <- sort(unique(group))
-    pvalues <- x[, pvalue]
+    pvalues <- log10( x[, pvalue] )
     for (i in 1:length(group.level)) {
         index <- x[, "Group"] == group.level[i]
         V(g)$shape[index] <- group.shape[i]
@@ -2129,16 +2185,16 @@ enrich.net2 <-  function (x, gene.set, node.id, node.name = node.id, pvalue,
                   alpha.f = 0.5)
             }
             else {
-                V(g)$color[index] <- sapply(1 - (group.pvalues - 
+                V(g)$color[index] <- sapply(1 - .9* (group.pvalues - 
                   min(group.pvalues))/(max(group.pvalues) - min(group.pvalues)), 
                   function(x) {
-                    adjustcolor(group.color[i], alpha.f = x)
+                    adjustcolor(group.color[i], alpha.f =  .1 + x ) # change range?
                   })
             }
         }
     }
 	if(plotting) { 
-		plot(g,, vertex.label.dist=1, ...)
+		plot(g, , vertex.label.dist = 1.2, ...)
 		if (show.legend) {
 			legend.parameter$legend <- group.level
 			legend.parameter$text.col <- group.color
@@ -2148,64 +2204,78 @@ enrich.net2 <-  function (x, gene.set, node.id, node.name = node.id, pvalue,
     return(g)
 }
 
-
-enrichmentNetwork <- function(enrichedTerms,layout_change = 0 ){
+enrichmentNetwork <- function(enrichedTerms, layoutButton=0, edge.cutoff = 5){
 	geneLists = lapply(enrichedTerms$Genes, function(x) unlist( strsplit(as.character(x)," " )   ) )
-	names(geneLists)= enrichedTerms$Pathways
+	names(geneLists) = enrichedTerms$Pathways
 	enrichedTerms$Direction = gsub(" .*","",enrichedTerms$Direction )
 
 	g <- enrich.net2(enrichedTerms, geneLists, node.id = "Pathways", numChar = 100, 
-	   pvalue = "adj.Pval", edge.cutoff = 0.2, pvalue.cutoff = 1, degree.cutoff = 0,
-	   n = 200, group = enrichedTerms$Direction, vertex.label.cex = 1, vertex.label.color = "black", layout_change = layout_change)
+	   pvalue = "adj.Pval",  pvalue.cutoff = 1, degree.cutoff = 0,
+	   n = 200, group = enrichedTerms$Direction, vertex.label.cex = 1, 
+       vertex.label.color = "black", show.legend = FALSE, 
+       layoutButton = layoutButton, edge.cutoff = edge.cutoff) 
 
 }
 
-enrichmentNetworkPlotly <- function(enrichedTerms, layout_change = 0){
-	geneLists = lapply(enrichedTerms$Genes, function(x) unlist( strsplit(as.character(x)," " )   ) )
-	names(geneLists)= enrichedTerms$Pathways
+showGeneIDs <- function(species, nGenes = 10){
+# Given a species ID, this function returns 10 gene ids for each idType
+    if(species == "BestMatch")
+      return(as.data.frame("Select a species above.") )
 
-	g <- enrich.net2(enrichedTerms, geneLists, node.id = "Pathways", numChar = 100, 
-	   pvalue = "adj.Pval", edge.cutoff = 0.2, pvalue.cutoff = 1, degree.cutoff = 0,
-	   n = 200, group = enrichedTerms$Direction, vertex.label.cex = 0.8, vertex.label.color = "black"
-	   ,plotting=TRUE, layout_change = layout_change)
+	idTypes <- dbGetQuery( convert,
+						paste0( " select DISTINCT idType from mapping where species = '", species,"'") )	# slow
+    idTypes <- idTypes[,1, drop = TRUE]
+    
+    if(nGenes > 100) nGenes <- 100; # upper limit
+    
+    # for each id Type
+    for(k in 1:length(idTypes)){
+        # retrieve 500 gene ids and then random choose 10
+		result <- dbGetQuery( convert,
+                       paste0( " select  id,idType from mapping where species = '", species,"' 
+                                 AND idType ='", idTypes[k], "' 
+                                 LIMIT ", 50 * nGenes) )
+       result <- result[sample(1:(50 * nGenes), nGenes), ]
+       if(k == 1) { 
+          resultAll <- result 
+       } else { 
+         resultAll <- rbind(resultAll, result)
+       }
+     }
 
-	vs <- V(g)
-	es <- as.data.frame(get.edgelist(g))
-	Nv <- length(vs)
-	Ne <- length(es[1]$V1)
-	# create nodes
-	L <- layout.kamada.kawai(g)
-	Xn <- L[,1]
-	Yn <- L[,2]
-	inc = (max(Yn)-min(Yn))/50  # for shifting
-	#group <- ifelse(V(g)$shape == "circle", "GO", "KEGG")
-	 group <- as.character(enrichedTerms$Direction)
-	network <- plot_ly(x = ~Xn, y = ~Yn, type = "scatter", mode = "markers",
-	   marker = list(color = V(g)$color, size = V(g)$size*2,
-		  symbol= ~V(g)$shape, line = list(color = "gray", width = 2)),
-	   hoverinfo = "text", text = ~paste("</br>", group, "</br>", names(vs))) %>%
-	   add_annotations( x = ~Xn, y = ~Yn+inc, text = names(vs), showarrow = FALSE,
-		  font = list(color = "#030303", size = 12))
-	# create edges
-	edge_shapes <- list()
-	for(i in 1:Ne)
-	{
-	   v0 <- es[i,]$V1
-	   v1 <- es[i,]$V2
-	   index0 <- match(v0, names(V(g)))
-	   index1 <- match(v1, names(V(g)))
-	   edge_shape <- list(type = "line", line = list(color = "gray" ,
-		  width = E(g)$width[i]/2), x0 = Xn[index0], y0 = Yn[index0],
-		  x1 = Xn[index1], y1 = Yn[index1])
-	   edge_shapes[[i]] <- edge_shape
-	}
-	# create network
-	axis <- list(title = "", showgrid = FALSE, showticklabels = FALSE, zeroline = FALSE)
-	h <- layout(network, title = "Enrichment Network", shapes = edge_shapes,
-	   xaxis = axis, yaxis = axis)
-	config(h, showLink = TRUE)
-	   
-	   
+     # Names of idTypes
+     idNames <- dbGetQuery( convert,
+                            paste0( " SELECT id,idType from idIndex where id IN ('",
+                                    paste(idTypes,collapse="', '"),  "') "))
+     
+     resultAll <- merge(resultAll, idNames, by.x = "idType", by.y = "id")
+     
+     
+
+     #library(dplyr)
+     resultAll <- resultAll %>% 
+       select(id, idType.y) %>%
+       group_by(idType.y) %>%
+       summarise(Examples = paste0(id, collapse = "; "))
+
+       colnames(resultAll)[1] <- "ID Type"
+        # put symbols first, refseq next, followed by ensembls. Descriptions (long gnee names) last
+        resultAll <- resultAll[ order( grepl("ensembl", resultAll$'ID Type'), decreasing = TRUE), ]    
+        resultAll <- resultAll[ order( grepl("refseq", resultAll$'ID Type'), decreasing = TRUE), ]      
+        resultAll <- resultAll[ order( grepl("symbol", resultAll$'ID Type'), decreasing = TRUE), ]
+        resultAll <- resultAll[ order( grepl("description", resultAll$'ID Type'), decreasing = FALSE), ]
+    
+    return(resultAll)
+
+}
+
+
+# Wrapping long text by adding \n 
+#  "Mitotic DNA damage checkpoint"  --> "Mitotic DNA damage\ncheckpoint"
+# https://stackoverflow.com/questions/7367138/text-wrap-for-plot-titles
+wrap_strings <- function( vector_of_strings, width = 30 ) { 
+  as.character( sapply( vector_of_strings, FUN=function(x) 
+  { paste(strwrap(x, width = width), collapse = "\n")}) )
 }
 
 	# output Parameter: This function outputs values in the input$variable to input_variable 
@@ -2225,426 +2295,6 @@ enrichmentNetworkPlotly <- function(enrichedTerms, layout_change = 0){
 
 	}
 
- if(0 ){ # pathway testing
-	x = read.csv("expression.csv")
-	x = read.csv("expression1_no_duplicate.csv")
-	x = read.csv("mouse1.csv")
-	x = read.csv("GSE40261.csv")
-	x = read.csv("GSE52778_All_Sample_FPKM_Matrix.csv")
-	x = read.csv("exampleData/GSE87194.csv")
-	x = read.csv("exampleData/expression_3groups.csv")
-    x = read.csv("C:/Users/Xijin.Ge/Google Drive/research/Shiny/idep/sampleData/BcellGSE71176_p53-two group.csv")
-	x = x[order(x[,1]),]
-	x = x[!duplicated(x[,1]),]
-	rownames(x)= x[,1]
-	x = x[,-1]
-
-	tem = apply(x,1,max)
-	x = x[which(tem> 1),] 
-
-	x = log(x+abs( 1),2)
-	tem = apply(x,1,sd)
-	x = x[order(-tem),]
-
-	selectOrg = "BestMatch"; GO="GOBP"; 
-	myrange = c(15,1000)
-
-	converted = convertID(rownames(x),selectOrg)
-
-	head(converted$conversionTable)
-	mapping = converted$conversionTable
-
-	rownames(x) = toupper(rownames(x))
-	x1 = merge(mapping[,1:2],x,  by.y = 'row.names', by.x = 'User_input')
-	tem = apply(x1[,3:(dim(x1)[2]-2)],1,sd)
-	x1 = x1[order(x1[,2],-tem),]
-	x1 = x1[!duplicated(x1[,2]) ,]
-	rownames(x1) = x1[,2]
-	x1 = as.matrix(x1[,c(-1,-2)])
-
-	convertedData = x1
-	gmt = readGeneSets(converted, convertedData, GO,selectOrg, myrange)
-
-	subtype = detectGroups(colnames(convertedData))
-	Pvalue = 1  # cut off to report in PGSEA. Otherwise NA
-	Pval_pathway = 0.05   # cut off for P value of ANOVA test  to writ to file 
-	top = 30   # number of pathways to show
-	myrange = c(10,2000)
-
-	pg = myPGSEA (x,cl=gmt,range=myrange,p.value=TRUE, weighted=FALSE,nPermutation=1)
-	result = PGSEApathway (converted,convertedData, selectOrg,GO,gmt, myrange,.05,30)
-	smcPlot(result$pg3,factor(subtype),scale = c(-result$best, result$best), show.grid = T, margins = c(3,1, 13, 23), col = .rwb,cex.lab=0.5)
-	smcPlot(result$pg3,factor(subtype),scale = c(-max(result$pg3), max(result$pg3)), show.grid = T, margins = c(3,1, 13, 23), col = .rwb,cex.lab=0.5)
-
-	pca = 100*prcomp(t(x))$rotation 
-	Npca = 10
-	if (Npca > dim(pca)[2]) { Npca = dim(pca)[2] } else pca <-  pca[,1:Npca]
-	#pca = pca[,1:5]
-	pg = myPGSEA (pca,cl=gmt,range=myrange,p.value=TRUE, weighted=FALSE,nPermutation=1)
-
-	# correcting for multiple testing
-	p.matrix = pg$p.result
-	tem = p.adjust(as.numeric(p.matrix),"fdr")
-	p.matrix = matrix(tem, nrow=dim(p.matrix)[1], ncol = dim(p.matrix)[2] )
-	rownames(p.matrix) = rownames(pg$p.result); colnames(p.matrix) = colnames(pg$p.result)
-
-	# using absolute value to rank 
-	#selected = unlist( apply(pg$result, 2, function(y) which( rank(y) >= length(y)-3.1)   ) )
-
-	# using p value to rank #
-	#selected = unlist( apply(p.matrix, 2, function(x) which( rank(x,ties.method='first') <= 5)   ) )
-	selected =c()
-	for( i in 1:dim(p.matrix)[2]) {
-		tem = which( rank(p.matrix[,i],ties.method='first') <= 3) 
-		#tem = which( rank(pg$result[,i],ties.method='first') >= dim(p.matrix)[1]-3.1)
-		names(tem) = paste("PC",i," ", rownames(p.matrix)[tem], sep="" )
-		selected = c(selected, tem)
-	}
-	rowids = gsub(" .*","",names(selected))
-	rowids = as.numeric( gsub("PC","",rowids) )
-	pvals = p.matrix[ cbind(selected,rowids) ]
-	a=sprintf("%-1.0e",pvals)
-	tem = pg$result[selected,]
-	rownames(tem) = paste(a,names(selected)); #colnames(tem)= paste("PC",colnames(tem),sep="")
-
-	tem = tem[!duplicated(selected),] 
-	#tem = t(tem); tem = t( (tem - apply(tem,1,mean)) ) #/apply(tem,1,sd) )
-	smcPlot(tem,scale =  c(-max(tem), max(tem)), show.grid = T, margins = c(3,1, 13, 23), col = .rwb,cex.lab=0.5)
-
-	############  testing D.E.G.
-	limma = DEG.limma(convertedData, .1, .5,rawCounts=NULL,countsDEGMethods=1,priorCounts=3, dataFormat=2)
-	genes = limma$results
-		if( is.null(genes) ) return(NULL)
-		ix = match(limma$comparisons, colnames(genes)) 
-		query = rownames(genes)[which(genes[,ix] != 0)]
-		iy = match(query, rownames(convertedData  ) )
-		convertedData[iy,]
-		iz= match( detectGroups(colnames(convertedData)), unlist(strsplit( limma$comparisons, "-"))	  )
-		iz = which(!is.na(iz))
-		myheatmap( convertedData[iy,iz] )
-		# convertedData()[iy,iz]
-
-		# rawCounts = read.csv("exampleData/airway_GSE52778.csv", row.names=1)
-		x = read.csv("exampleData/GSE87194.csv") ; x[,1] = toupper(x[,1]);   x = x[order(x[,1]),];    x = x[!duplicated(x[,1]),] #rownames(x)= x[,1]; rawCounts= x[,-1]
-		rawCounts = rawCounts[which(apply(rawCounts,1,max )>10 ) ,]
-		# res =DEG.DESeq2(rawCounts, .05, 2)
-		# res = 
-		# tem = res$topGenes
-		# head( res$results )
-		
-		# res2= DEG.limma(rawCounts, .05, 2,rawCounts, 1 ,3) 
-
-	######### testing GAGE
-	fc = apply(x1[,4:6],1,mean)- apply(x1[,1:3],1,mean)
-	paths <- gage(fc, gsets = gmt, ref = NULL, samp = NULL)
-
-	paths <- as.data.frame(paths)
-	path1 <- rownames(paths)[1]
-
-
-
-		x = read.csv("exampleData/airway_GSE52778.csv", row.names=1)
-		#x = read.csv("exampleData/GSE87194.csv") ; 
-		x=read.csv("GSE37704_sailfish_genecounts.csv");
-		#x = read.csv("exampleData/counts_test_data_3groups.csv") ;
-		x = read.csv("exampleData/hoppe 2 samples.csv")
-		
-		x[,1] = toupper(x[,1]);  
-		colnames(x)[1]= "User_input"
-
-
-	selectOrg = "BestMatch"; GO="KEGG"; 
-	myrange = c(15,2000)
-
-	converted = convertID(x[,1],selectOrg)
-	mapping = converted$conversionTable
-	x = merge(mapping[,1:2],x,   by = 'User_input')
-	tem = apply(x[,3:(dim(x)[2]-2)],1,sum)
-	x = x[order(x[,2],-tem),]
-	x = x[!duplicated(x[,2]) ,]
-	rownames(x) = x[,2]
-	x = as.matrix(x[,c(-1,-2)])
-
-	convertedData = x
-	gmt = readGeneSets(converted, convertedData, GO,selectOrg, myrange)
-
-	res =DEG.DESeq2(x, .25, 1)
-
-	res <- DEG.limma (x, maxP_limma=.2, minFC_limma=2, x,countsDEGMethods=2,priorCounts=3, dataFormat=1)
-
-	top1 <- res$topGenes[[1]]
-
-	head(top1)	
-
-		paths <- gage(top1[,1,drop=F], gsets = gmt, ref = NULL, samp = NULL)
-		paths <-  rbind(paths$greater,paths$less)
-		if(dim(paths)[1] < 1 | dim(paths)[2]< 6 ) return( noSig )
-		top1 <- paths[,c('stat.mean','set.size','q.val')]
-		colnames(top1)= c("stat.mean","Set Size","FDR")
-		top1 <- top1[order(top1[,3]) ,]  
-		if ( length( which( top1[,3] <=  .9   ) ) == 0 )
-		return( noSig)
-		top1 <- top1[which(top1[,3] <=  .9 ) ,]
-		if(dim(top1)[1] > 30 ) 
-			top1 <- top1[1:30,]
-		top1
-
-
-	res = DEG.limma(x, .05, 2,NULL, 1,3 )
-
-	## fgsea
-		top1 <- res$topGenes[[1]]
-	head(top1)	
-	colnames(top1)= c("Fold","FDR")
-	fold = top1[,1]; names(fold) <- rownames(top1)
-		paths <- fgsea(pathways = gmt, 
-					stats = fold,
-					minSize=15,
-					maxSize=2000,
-					nperm=10000)
-	if(dim(paths)[1] < 1  ) return( noSig )
-		paths <- as.data.frame(paths)
-		top1 <- paths[,c(4,5,7,3)]
-		rownames(top1) <- paths[,1]
-		colnames(top1)= c("ES","NES","Set Size","FDR")
-		top1 <- top1[order(top1[,4]) ,]  
-		if ( length( which( top1[,4] <=  input$pathwayPvalCutoff   ) ) == 0 )
-		return( noSig)
-		top1 <- top1[which(top1[,4] <=  input$pathwayPvalCutoff ) ,]
-		if(dim(top1)[1] > input$nPathwayShow ) 
-			top1 <- top1[1:input$nPathwayShow,]
-			
-		top1
-		
-	# testing visualize KEGG pathway
-
-	query = x[1:500,1]
-		fc= convertEnsembl2Entrez (query, Species)  
-		
-		fc = log2(fc/mean(fc))
-		
-			top1 <- res$topGenes[[1]]
-		top1 <- top1[,1]; names(top1)= rownames(res$topGenes[[1]] )
-		Species = converted$species[1,1] 	
-		
-	system.time(  fc <- convertEnsembl2Entrez (top1, Species)  )
-			fc = sort(fc,decreasing =T)
-		
-		head(fc)
-		
-		system.time ( y<- gsePathway(fc, nPerm=1000,
-				minGSSize=15, pvalueCutoff=0.5,
-				pAdjustMethod="BH", verbose=FALSE) )
-		res <- as.data.frame(y)
-		head(res)
-		
-		
-		# testing mouse 
-		top1 = limma$topGenes[[1]]
-		top1 <- top1[,1]; names(top1)= rownames(limma$topGenes[[1]] )
-		Species = converted$species[1,1] 	
-		system.time(  fc <- convertEnsembl2Entrez (top1, Species)  )
-				fc = sort(fc,decreasing =T)
-				system.time ( y<- gsePathway(fc, nPerm=1000,organism = "mouse",
-				minGSSize=15, pvalueCutoff=0.5,
-				pAdjustMethod="BH", verbose=FALSE) )
-		res <- as.data.frame(y)
-		head(res)
-		ensemblSpecies <- c("hsapiens_gene_ensembl","rnorvegicus_gene_ensembl", "mmusculus_gene_ensembl",
-		"celegans_gene_ensembl","scerevisiae_gene_ensembl", "drerio_gene_ensembl", "dmelanogaster_gene_ensembl")
-			ReactomePASpecies= c("human", "rat", "mouse", "celegans", "yeast", "zebrafish", "fly" )
-
-
-	#### testing KEGG pathway graph
-	x=read.csv("GSE37704_sailfish_genecounts.csv");
-		#x = read.csv("exampleData/counts_test_data_3groups.csv") ;
-		x[,1] = toupper(x[,1]);  
-		colnames(x)[1]= "User_input"
-
-
-	selectOrg = "BestMatch"; GO="KEGG"; 
-	myrange = c(15,2000)
-
-	converted = convertID(x[,1],selectOrg)
-	mapping = converted$conversionTable
-	x = merge(mapping[,1:2],x,   by = 'User_input')
-	tem = apply(x[,3:(dim(x)[2]-2)],1,sum)
-	x = x[order(x[,2],-tem),]
-	x = x[!duplicated(x[,2]) ,]
-	rownames(x) = x[,2]
-	x = as.matrix(x[,c(-1,-2)])
-
-	convertedData = x
-	gmt = readGeneSets(converted, convertedData, GO,selectOrg, myrange)
-
-	res =DEG.DESeq2(x, .25, 1)
-
-	top1 <- res$topGenes[[1]]
-
-	head(top1)	
-
-		paths <- gage(top1[,1,drop=F], gsets = gmt, ref = NULL, samp = NULL)
-		paths <-  rbind(paths$greater,paths$less)
-		
-	selectedPathway = rownames(paths)[1]
-	# [1] "Cytokine-cytokine receptor interaction"
-
-		Species <- converted$species[1,1]
-		
-		fold = top1[,1]; names(fold) <- rownames(top1)
-		fold <- convertEnsembl2Entrez(fold,Species)
-		
-		keggSpecies <- as.character( keggSpeciesID[which(keggSpeciesID[,1] == Species),3] )
-		
-		if(nchar( keggSpecies) <=2 ) return(blank) # not in KEGG
-	 #cat("here5  ",keggSpecies, " ",Species," ",input$sigPathways)
-		# kegg pathway id
-	pathID = keggPathwayID(selectedPathway, Species, "KEGG",selectOrg)
-
-	cat("\n",fold[1:5],"\n",keggSpecies,"\n",pathID)
-	if(is.null(pathID) ) return(blank) # kegg pathway id not found.	
-	pv.out <- pathview(gene.data = fold, pathway.id = pathID, species = keggSpecies, kegg.native=TRUE)
-
-
-
-
-	#######################################
-	# testing for species not recognized 
-	x=read.csv("exampleData/Wu_wet_vs_control - new species.csv");
-		#x = read.csv("exampleData/counts_test_data_3groups.csv") ;
-		x[,1] = toupper(x[,1]);  
-		colnames(x)[1]= "User_input"
-	selectOrg = "BestMatch"; GO="KEGG"; 
-	myrange = c(15,2000)
-	converted = convertID(x[,1],selectOrg)
-	mapping = converted$conversionTable	  
-
-    ############################################
-    # Test limma  3-3-2019
-    x = read.csv("C:/Users/Xijin.Ge/Google Drive/research/Shiny/idep/sampleData/BcellGSE71176_p53-two group.csv")
-    x = read.csv("C:/Users/Xijin.Ge/Google Drive/research/Shiny/idep/sampleData/BcellGSE71176_p53_reduced_4 groups.csv")
-
-	x = x[order(x[,1]),]
-	x = x[!duplicated(x[,1]),]
-	rownames(x)= x[,1]
-	x = x[,-1]
-
-	tem = apply(x,1,max)
-	x = x[which(tem> 1),] 
-    rawCounts = x;
-
-	selectOrg = "BestMatch"; GO="GOBP"; 
-
-	converted = convertID(rownames(x),selectOrg)
-
-	head(converted$conversionTable)
-	mapping = converted$conversionTable
-
-	rownames(x) = toupper(rownames(x))
-	x1 = merge(mapping[,1:2],x,  by.y = 'row.names', by.x = 'User_input')
-	tem = apply(x1[,3:(dim(x1)[2]-2)],1,sd)
-	x1 = x1[order(x1[,2],-tem),]
-	x1 = x1[!duplicated(x1[,2]) ,]
-	rownames(x1) = x1[,2]
-	x1 = as.matrix(x1[,c(-1,-2)])
-
-	convertedData = x1
-    x=convertedData;
-    maxP_limma=.1; minFC_limma=2;
-    countsDEGMethods = 2;
-    priorCounts = 3
-    dataFormat=1
-    selectedComparisons=NULL; sampleInfo = NULL;modelFactors=NULL; blockFactor = NULL
-
-
- }
- 
-if(0) {  # testing
-
-	inFile = "C:/Users/Xijin.Ge/Google Drive/research/Shiny/RNAseqer/expression1_no_duplicate.csv"
-	# inFile = "C:/Users/Xijin.Ge/Google Drive/research/Shiny/RNAseqer/GSE52778_All_Sample_FPKM_Matrix.csv"
-	lowFilter = 1; logStart = 1
-	x = read.csv(inFile)
-	x[,1] = toupper(x[,1])
-	x = x[order(x[,1]),]
-	x = x[!duplicated(x[,1]),]
-	rownames(x)= x[,1]
-	x = x[,-1]
-
-	tem = apply(x,1,max)
-	x = x[which(tem> lowFilter),] 
-
-	tem = apply(x,1,function(y) sum(y>2) )
-	
-	
-	x = log(x+abs( logStart),2)
-	tem = apply(x,1,sd)
-	x = x[order(-tem),]
-
-	###########Converted data
-	convertedID = convertID(rownames(x ),selectOrg="BestMatch", selectGO = "GOBP" );#"gmax_eg_gene"
-
-	mapping <- convertedID$conversionTable
-
-		rownames(x) = toupper(rownames(x))
-		x1 = merge(mapping[,1:2],x,  by.y = 'row.names', by.x = 'User_input')
-		tem = apply(x1[,3:(dim(x1)[2]-2)],1,sd)
-		x1 = x1[order(x1[,2],-tem),]
-		x1 = x1[!duplicated(x1[,2]) ,]
-		rownames(x1) = x1[,2]
-		x1 = as.matrix(x1[,c(-1,-2)])
-
-		
-		tem = apply(x1,1,sd)
-	x1 = x1[order(-tem),]
-	x=x1
-		head(x)
-		
-	#################################
-	#testing Kmeans
-    n = 2000
-	x=as.matrix(x[1:n,])-apply(x[1:n,],1,mean)
-	#x = 100* x / apply(x,1,sum)  # this is causing problem??????
-	#x = x - apply(x,1,mean)  # this is causing problem??????
-	#colnames(x) = gsub("_.*","",colnames(x))
-	set.seed(2)
-	# determining number of clusters
-	k=4
-
-	cl = kmeans(x,k,iter.max = 50)
-	#myheatmap(cl$centers)	
-
-	hc <- hclust2(dist2(cl$centers-apply(cl$centers,1,mean) )  )# perform cluster for the reordering of samples
-	tem = match(cl$cluster,hc$order) #  new order 
-
-	x = x[order(tem),]
-
-	bar = sort(tem)
-	#myheatmap2(x, bar)
-	# GO
-	pp=0
-	for( i in 1:k) {
-		#incProgress(1/k, , detail = paste("Cluster",toupper(letters)[i]) )
-		query = rownames(x)[which(bar == i)]
-		convertedID = convertID(query,"BestMatch", selectGO = "GOBP" );#"gmax_eg_gene"
-		tem = geneInfo(convertedID,"BestMatch") #rv$selectOrg ) ;
-		tem <- tem[which( tem$Set == "List"),] 
-
-
-		#selectOrg = rv$selectOrg
-		selectOrg ="BestMatch"
-
-		result = FindOverlap (convertedID,tem, "GOBP",selectOrg,1) 
-		if( dim(result)[2] ==1) next;   # result could be NULL
-		result$Genes = toupper(letters)[i] 
-		if (pp==0 ) { results = result; pp = 1;} else  results = rbind(results,result)
-	}
-	results= results[,c(5,1,2,4)]
-	colnames(results)= c("Cluster","FDR","Genes","GO BP Terms")
-	minFDR = 0.05
-	if(min(results$FDR) > minFDR ) results = as.matrix("No signficant enrichment found.") else
-	results = results[which(results$FDR < minFDR),]
-}
 
 ################################################################
 #   Server function
@@ -2662,6 +2312,10 @@ function(input, output,session) {
  # geneSets(): gene set as a list for pathway analysis
 options(shiny.maxRequestSize = 200*1024^2) # 200MB file max for upload
 observe({  updateSelectizeInput(session, "selectOrg", choices = speciesChoice, selected = speciesChoice[1], server = TRUE )      })
+
+  # for gene ID example
+  observe({  updateSelectizeInput(session, "userSpecieIDexample", choices = speciesChoice, selected = speciesChoice[1] )      })  
+
 observe({  updateSelectInput(session, "heatColors1", choices = colorChoices )      })
 observe({  updateSelectInput(session, "distFunctions", choices = distChoices )      })
 observe({  updateSelectInput(session, "hclustFunctions", choices = hclustChoices )      })
@@ -3003,15 +2657,6 @@ readSampleInfo <- reactive ({
 		})
 	})
 
-############################################
-#Purpose: this logic for second tab i.e. Gene ID Examples
-#File: gene_id_page_ser.R
-############################################
-observeEvent(input$geneIdButton, {
-  source('gene_id_page_ser.R') #load server logic and functions for Gene ID popup
-  geneIDPage(input = input, output = output,
-             session = session, orgInfo = orgInfo, path = datapath)
-})
 	
 output$sampleInfoTable <- renderTable({
 
@@ -3064,7 +2709,7 @@ output$nGenesFilter <- renderText({
 output$fileFormat <- renderUI({
   shinyjs::hideElement(id = 'loadMessage')
   shinyjs::hideElement(id = "waitForLibrary")
-		i = "<h3>Ready to load data files.</h3>"
+		i = "<h4>Ready to load data files.</h3>"
 #		i = c(i,"Users can upload a CSV or tab-delimited text file with the first column as gene IDs. 
 #		For RNA-seq data, read count per gene is recommended.
 #		Also accepted are normalized expression data based on FPKM, RPKM, or DNA microarray data. iDEP can convert most types of common gene IDs to Ensembl gene IDs, which is used 
@@ -3083,7 +2728,7 @@ converted <- reactive({
 		tem = rv$selectOrg;
 		isolate( {
 		
-		convertID(rownames(readData()$data ),rv$selectOrg, input$selectGO );
+		convertID(rownames(readData()$data ),rv$selectOrg);
 
 		# converted()$conversionTable: Not matched is skipped
 		#User_input	ensembl_gene_id	Species
@@ -3305,6 +2950,23 @@ output$species <-renderTable({
 
       }) # avoid showing things initially         
     }, digits = -1,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+
+  output$showGeneIDs4Species <-renderTable({
+    if (input$userSpecieIDexample == 0)    return()
+      withProgress(message="Retrieving gene IDs (2 minutes)", {
+          geneIDs <- showGeneIDs(species = input$userSpecieIDexample, nGenes = 10)
+        incProgress(1, detail = paste("Done"))	  })
+      geneIDs
+  }, digits = -1,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+  
+ output$orgInfoTable <- DT::renderDataTable({
+     
+     df <- orgInfo[, c("ensembl_dataset", "name", "totalGenes")]
+     colnames(df) <- c("Ensembl/STRING-db ID", "Name (Assembly)", "Total Genes")
+     row.names(df) <- NULL
+     df
+  })
+  
 
 # show first 20 rows of processed data; not used
 output$debug <- renderTable({
@@ -5196,6 +4858,7 @@ KmeansGOdata <- reactive({
 	tem = input$kmeansNormalization
 	tem = input$nClusters
 	tem = input$removeRedudantSets
+    tem = input$useFilteredAsBackground
 	####################################
 	withProgress(message=sample(quotes,1), detail ="GO Enrichment", {
 		# GO
@@ -5213,14 +4876,20 @@ KmeansGOdata <- reactive({
 				convertedID$IDs <- query
 				if(input$removeRedudantSets) reduced = redudantGeneSetsRatio else reduced = FALSE
 
+                if(input$useFilteredAsBackground) {
+                   convertedDataBackground <- converted() 
+                } else {
+                  convertedDataBackground <- NULL
+                 }
+
+
 				result <- FindOverlap( converted = convertedID,
 				                       gInfo = allGeneInfo(),
 				                       GO = input$selectGO3,
 				                       selectOrg = rv$selectOrg,
 				                       minFDR = minFDR,
 				                       reduced = reduced,
-				                       convertedData = NULL, 
-				                       useFilteredBackground = TRUE
+				                       convertedDataBackground = convertedDataBackground
 				                       )
 			}
 			if( is.null(result)) next;   # result could be NULL
@@ -5260,12 +4929,13 @@ output$KmeansGO <- renderTable({
 	
     return( results1[,-5])
 	 }
-  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto", hover=T, 
+    sanitize.text.function = function(x) x) # hyperText
 
 output$downloadKmeansGO <- downloadHandler(
 		filename = function() {"KmeansEnrichment.csv"},
 		content = function(file) {
-			write.csv(KmeansGOdata(), file, row.names=FALSE)
+			write.csv( removeHypertext( KmeansGOdata() ), file, row.names=FALSE)
 	    }
 	) 
 	
@@ -5295,7 +4965,7 @@ output$enrichmentPlotKmeans <- renderPlot({
 	####################################
 	
 	
-	tem1 = KmeansGOdata()
+	tem1 = removeHypertext( KmeansGOdata() )
 	colnames(tem1)[1]="Direction"
 	enrichmentPlot(tem1, 46  )
 
@@ -5306,7 +4976,8 @@ output$enrichmentPlotKmeans4Download <- downloadHandler(
       filename = "enrichmentPlotKmeans.eps",
       content = function(file) {
 	  cairo_ps(file, width = 10, height = 16)
-	  tem = KmeansGOdata()
+	  tem = removeHypertext( KmeansGOdata() )
+
 	  colnames(tem)[1]="Direction"
 	  enrichmentPlot(tem,41  )
         dev.off()
@@ -7278,7 +6949,13 @@ geneListGOTable <- reactive({
 				convertedID <- converted()
 				convertedID$IDs <- query
 				if(input$removeRedudantSets) reduced = redudantGeneSetsRatio else reduced = FALSE
-				result = FindOverlap (convertedID,allGeneInfo(), input$selectGO2,rv$selectOrg,1, reduced, convertedData(), input$UseFilteredGenesEnrich ) }
+                if(input$UseFilteredGenesEnrich) {
+                   convertedDataBackground <- converted() 
+                } else {
+                  convertedDataBackground <- NULL
+                 }
+
+				result = FindOverlap (convertedID,allGeneInfo(), input$selectGO2,rv$selectOrg,1, reduced, convertedDataBackground) }
 
 			if( dim(result)[2] ==1) next;   # result could be NULL
 			if(i == -1) result$direction = "Up regulated"  else result$direction = "Down regulated"
@@ -7319,19 +6996,22 @@ output$geneListGO <- renderTable({
 	
 	return( results1[,-5] )
 	}	
-  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T, 
+  sanitize.text.function = function(x) x ) # for hypertext rendering
 	#   output$selectedHeatmap <- renderPlot({       hist(rnorm(100))    })	
+
 output$downloadGOTerms <- downloadHandler(
 		filename = function() {"Enriched.csv"},
 		content = function(file) {
-			write.csv(geneListGOTable(), file)
+			write.csv( removeHypertext( geneListGOTable() ), file)
 	    }
 	)
 
 output$enrichmentPlotDEG2 <- renderPlot({
     if(is.null(geneListGOTable())) return(NULL)
 	tem = input$removeRedudantSets
-	enrichmentPlot(geneListGOTable(), 45  )
+    
+	enrichmentPlot(removeHypertext( geneListGOTable() ), 45  )
 
 }, height=600, width=800)
 
@@ -7339,31 +7019,128 @@ output$enrichmentPlotDEG24Download <- downloadHandler(
       filename = "enrichmentPlotDEG2.eps",
       content = function(file) {
 	  cairo_ps(file, width = 10, height = 6)
-	  enrichmentPlot(geneListGOTable(),41  )
+	  enrichmentPlot(removeHypertext( geneListGOTable() ),41  )
         dev.off()
       })
 	  
 output$enrichmentNetworkPlot <- renderPlot({
     if(is.null(geneListGOTable())) return(NULL)
 	tem = input$removeRedudantSets
-	enrichmentNetwork(geneListGOTable(),layout_change = input$layoutButton2 )
+
+	enrichmentNetwork_old_remove_later(removeHypertext( geneListGOTable() ),
+                       layout_change = input$layoutButton2 )
 
 }, height=900, width=900)	  
 
-output$enrichmentNetworkPlot4Download <- downloadHandler(
-      filename = "enrichmentPlotDEG2.eps",
-      content = function(file) {
-	  cairo_ps(file, width = 12, height = 12)
-	enrichmentNetwork(geneListGOTable(),layout_change = input$layoutButton2 )
-        dev.off()
-      })	  
-
-output$enrichmentNetworkPlotly <- renderPlotly({
+# define a network
+networkDEG <- reactive({
     if(is.null(geneListGOTable())) return(NULL)
+    if(is.null( input$wrapTextNetworkDEG )) return(NULL)
 	tem = input$removeRedudantSets
-	enrichmentNetworkPlotly(geneListGOTable(),layout_change = input$layoutButton2 )
 
-})	  
+    network <- removeHypertext( geneListGOTable() )
+    
+    if(is.null( input$upORdownRegDEG )) return(NULL)
+    if(input$upORdownRegDEG != "Both")
+       network <- network[ grepl(input$upORdownRegDEG, network$Direction), ]
+    if(dim(network)[1] == 0) return(NULL)
+
+    if(input$wrapTextNetworkDEG)
+      network$Pathways <- wrap_strings( network$Pathways ) # wrap long pathway names using default width of 30 10/21/19
+
+    g <- enrichmentNetwork(network,layoutButton = input$layoutVisDEG, edge.cutoff = input$edgeCutoffDEG )
+
+    data1 <- toVisNetworkData(g)
+    
+    # Color codes: https://www.rapidtables.com/web/color/RGB_Color.html
+    data1$nodes$shape <- "dot"
+    # remove the color change of nodes
+    #data1$nodes <- subset(data1$nodes, select = -color)
+    
+    data1$nodes$size <- 5 + data1$nodes$size^2 
+    
+    return(data1)
+})
+
+  # note the same code is used twice as above. They need to be updated together!!!	  
+output$visNetworkDEG <- renderVisNetwork({
+    if(is.null(geneListGOTable())) return(NULL)
+    if(dim(geneListGOTable())[1] == 1) return(NULL)
+    if(is.null( input$wrapTextNetworkDEG )) return(NULL)
+	tem = input$removeRedudantSets
+    if(is.null(networkDEG() )) return(NULL)
+
+    data1 <- networkDEG()
+    visNetwork(nodes = data1$nodes, edges = data1$edges, height = "700px", width = "700px")%>% 
+      visIgraphLayout(layout = "layout_with_fr") %>%
+      visNodes( 
+        color = list(
+          #background = "#32CD32",
+          border = "#000000",
+          highlight = "#FF8000"
+        ),
+        font = list(
+          color = "#000000",
+          size = 20
+        ),
+        borderWidth = 1,
+        shadow = list(enabled = TRUE, size = 10)
+      )  %>%
+      visEdges(
+        shadow = FALSE,
+        color = list(color = "#A9A9A9", highlight = "#FFD700")
+      ) %>% visExport(type = "jpeg", 
+                      name = "export-network", 
+                      float = "left", 
+                      label = "Export as an image (only what's visible on the screen!)", 
+                      background = "white", 
+                      style= "") 
+  })	
+  
+output$visNetworkDEGDownload <- downloadHandler(
+    filename = "enrichmentPlotNetwork_DEG.html",
+    content = function(file) {
+
+    # same code as above to generate the network
+	tem = input$removeRedudantSets
+
+    data1 <- networkDEG()
+    visNetwork(nodes = data1$nodes, edges = data1$edges, height = "700px", width = "700px")%>% 
+      visIgraphLayout(layout = "layout_with_fr") %>%
+      visNodes( 
+        color = list(
+          #background = "#32CD32",
+          border = "#000000",
+          highlight = "#FF8000"
+        ),
+        font = list(
+          color = "#000000",
+          size = 20
+        ),
+        borderWidth = 1,
+        shadow = list(enabled = TRUE, size = 10)
+      )  %>%
+      visEdges(
+        shadow = FALSE,
+        color = list(color = "#A9A9A9", highlight = "#FFD700")
+      )  %>% 
+        visSave(file = file, background = "white")
+      
+    })  
+
+
+  output$downloadNodesDEG <- downloadHandler(
+    filename = function() {"network_nodes.csv"},
+    content = function(file) {      
+      write.csv(networkDEG()$nodes, file, row.names=FALSE)
+    }
+  )
+  output$downloadEdgesDEG <- downloadHandler(
+    filename = function() {"network_edges.csv"},
+    content = function(file) {    
+      write.csv(networkDEG()$edges, file, row.names=FALSE)
+    }
+  )  
 	  
 output$DEG.Promoter <- renderTable({
     if (is.null(rv$fileExpression)&& rv$goButton == 0)   return(NULL)
@@ -9541,42 +9318,139 @@ output$enrichmentNetworkPlotPathway <- renderPlot({
 	enrichmentNetwork(pathwayListData(),layout_change = input$layoutButton3 )
 }, height=900, width=900)	  
 
-output$enrichmentNetworkPlotPathway4Download <- downloadHandler(
-      filename = "enrichmentPlotNetworkPathway.eps",
-      content = function(file) {
-	  cairo_ps(file, width = 12, height = 12)
-	  enrichmentNetwork(pathwayListData(),layout_change = input$layoutButton3 )
-        dev.off()
-      })	
 
-
-output$enrichmentNetworkPlotlyPathway <- renderPlotly({
+# define a network. This code block is almost exactly the same as that for the network in DEG2
+networkPA <- reactive({
     if(is.null(pathwayListData())) return(NULL)
-    if (is.null(rv$fileExpression)&& rv$goButton == 0)   return(NULL)
+    if(is.null( input$wrapTextNetworkPA )) return(NULL)
+
 	tem = rv$selectOrg ; #tem = input$listComparisonsPathway
 	tem = input$selectGO; tem = input$selectContrast1
 	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
 	tem=input$nPathwayShow; tem=input$absoluteFold; tem =input$pathwayMethod
-	if(is.null(input$selectGO ) ) return (NULL)
-	enrichmentNetworkPlotly(pathwayListData(),layout_change = input$layoutButton3 )
-})	  
 
+    network <- pathwayListData()
+
+    if(is.null( input$upORdownRegPA )) return(NULL)
+    if(input$upORdownRegPA != "Both")
+       network <- network[ grepl(input$upORdownRegPA, network$Direction), ]
+    if(dim(network)[1] == 0) return(NULL)
+
+    if(input$wrapTextNetworkPA)
+      network$Pathways <- wrap_strings( network$Pathways ) # wrap long pathway names using default width of 30 10/21/19
+
+    g <- enrichmentNetwork(network,layoutButton = input$layoutVisPA, edge.cutoff = input$edgeCutoffPA )
+
+    data1 <- toVisNetworkData(g)
+    
+    # Color codes: https://www.rapidtables.com/web/color/RGB_Color.html
+    data1$nodes$shape <- "dot"
+    # remove the color change of nodes
+    #data1$nodes <- subset(data1$nodes, select = -color)
+    
+    data1$nodes$size <- 5 + data1$nodes$size^2 
+    
+    return(data1)
+})
+
+  # note the same code is used twice as above. They need to be updated together!!!	  
+output$visNetworkPA <- renderVisNetwork({
+    if(is.null(pathwayListData())) return(NULL)
+    if(dim(pathwayListData())[1] == 1) return(NULL)
+    if(is.null( input$wrapTextNetworkPA )) return(NULL)
+    if(is.null(networkPA() )) return(NULL)
+
+	tem = rv$selectOrg ; #tem = input$listComparisonsPathway
+	tem = input$selectGO; tem = input$selectContrast1
+	tem = input$minSetSize; tem = input$maxSetSize; tem=input$pathwayPvalCutoff; 
+	tem=input$nPathwayShow; tem=input$absoluteFold; tem =input$pathwayMethod
+
+
+    data1 <- networkPA()
+
+    # render network of pathways
+    visNetwork(nodes = data1$nodes, edges = data1$edges, height = "700px", width = "700px")%>% 
+      visIgraphLayout(layout = "layout_with_fr") %>%
+      visNodes( 
+        color = list(
+          #background = "#32CD32",
+          border = "#000000",
+          highlight = "#FF8000"
+        ),
+        font = list(
+          color = "#000000",
+          size = 20
+        ),
+        borderWidth = 1,
+        shadow = list(enabled = TRUE, size = 10)
+      )  %>%
+      visEdges(
+        shadow = FALSE,
+        color = list(color = "#A9A9A9", highlight = "#FFD700")
+      ) %>% visExport(type = "jpeg", 
+                      name = "export-network", 
+                      float = "left", 
+                      label = "Export as an image (only what's visible on the screen!)", 
+                      background = "white", 
+                      style= "") 
+  })	
+ 
+output$visNetworkPADownload <- downloadHandler(
+    filename = "Pathway_Overlaping_Network_DEG.html",
+    content = function(file) {
+
+    data1 <- networkPA()
+    visNetwork(nodes = data1$nodes, edges = data1$edges, height = "700px", width = "700px")%>% 
+      visIgraphLayout(layout = "layout_with_fr") %>%
+      visNodes( 
+        color = list(
+          #background = "#32CD32",
+          border = "#000000",
+          highlight = "#FF8000"
+        ),
+        font = list(
+          color = "#000000",
+          size = 20
+        ),
+        borderWidth = 1,
+        shadow = list(enabled = TRUE, size = 10)
+      )  %>%
+      visEdges(
+        shadow = FALSE,
+        color = list(color = "#A9A9A9", highlight = "#FFD700")
+      )  %>% 
+        visSave(file = file, background = "white")
+      
+    })  
+
+
+output$downloadNodesPA <- downloadHandler(
+    filename = function() {"Pathway_network_nodes.csv"},
+    content = function(file) {      
+      write.csv(networkPA()$nodes, file, row.names=FALSE)
+    }
+  )
+
+output$downloadEdgesDEG <- downloadHandler(
+    filename = function() {"Pathway_network_edges.csv"},
+    content = function(file) {    
+      write.csv(networkPA()$edges, file, row.names=FALSE)
+    }
+  )  
 
 ################################################################
 #   Chromosome
 ################################################################
-  
+
 # visualizing fold change on chrs. 
 output$genomePlotly <- renderPlotly({
-		if (is.null(rv$fileExpression)&& rv$goButton == 0)   return(NULL)
-		#if(is.null(genomePlotDataPre() ) ) return(NULL)
-		
+		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)		
 		tem = rv$selectOrg ; 
 		tem = input$selectContrast2
 		if (is.null(input$selectContrast2 ) ) return(NULL)
 		if( rv$selectOrg == "NEW" | ncol(allGeneInfo() )==1 ) return(NULL)
 		if( length(limma()$topGenes) == 0 ) return(NULL)
-		
+		library(dplyr)
 		##################################  
 		# these are needed to make it responsive to changes in parameters
 		tem = rv$selectOrg;  tem = input$dataFileFormat; tem = input$noIDConversion; tem=input$missingValue
@@ -9591,6 +9465,15 @@ output$genomePlotly <- renderPlotly({
 		tem=input$limmaFCViz
 		tem = input$submitModelButton 
 		####################################
+
+		tem = input$MAwindowSize
+        tem = input$MAwindowSteps
+        tem = input$MAwindowCutoff
+        tem = input$ignoreNonCoding
+        tem = input$chRegionPval
+        tem = input$labelGeneSymbol
+
+		####################################
 		
 	  isolate({ 
 		withProgress(message=sample(quotes,1), detail ="Visualzing expression on the genome", {
@@ -9599,7 +9482,7 @@ output$genomePlotly <- renderPlotly({
 		p <- ggplot(fake, aes(x = a, y = b)) +
 							 geom_blank() + ggtitle("No genes with position info.") +
 							 theme(axis.title.x=element_blank(),axis.title.y=element_blank())
-							 
+
 		if(length( limma()$comparisons)  ==1 )  {
 			top1=limma()$topGenes[[1]]  
 		} else {
@@ -9610,118 +9493,214 @@ output$genomePlotly <- renderPlotly({
 		}
 		  if(dim(top1)[1] == 0 ) return (ggplotly(p))
 		  colnames(top1)= c("Fold","FDR")
-		  
-		 # write.csv(merge(top1,allGeneInfo(), by.x="row.names",by.y="ensembl_gene_id"  ),"tem.csv"  )
+
 		 x <- merge(top1,allGeneInfo(), by.x="row.names",by.y="ensembl_gene_id"  )
 
+         colnames(x)[which(colnames(x) == "Row.names")] <- "ensembl_gene_id"
+
+      
+        # only coding genes? 
+        if(input$ignoreNonCoding) {
+          x <- subset(x, gene_biotype == "protein_coding")
+        }
+
+
+        incProgress(0.1)
 		 # if no chromosomes found. For example if user do not convert gene IDs.
 		 if( dim(x)[1] >5  ) { 
-		
-			 x <- x[order(x$chromosome_name,x$start_position),]
-	 
-			 tem = sort( table( x$chromosome_name), decreasing=T)
 
-			 chromosomes <- names( tem[tem >= 1 ] )  # chromosomes with less than 100 genes are excluded
-			 if(length(chromosomes) > 50) chromosomes <- chromosomes[1:50]  # at most 50 chromosomes
-			 chromosomes <- chromosomes[ nchar(chromosomes)<=12] # chr. name less than 10 characters
-			 chromosomes = chromosomes[order(as.numeric(chromosomes) ) ]
-			 # chromosomes = chromosomes[!is.na(as.numeric(chromosomes) ) ]
-			 chromosomesNumbers = as.numeric(chromosomes)
+           x <- x[order(x$chromosome_name,x$start_position),]
+  
+           x$ensembl_gene_id <- as.character( x$ensembl_gene_id)
+   
+           # if symbol is missing use Ensembl id
+           x$symbol = as.character(x$symbol)  
+           ix = which(is.na(x$symbol))
+           ix2 = which(nchar(as.character(x$symbol))<= 2 )
+           ix3 = which( duplicated(x$symbol))
+           ix = unique( c(ix,ix2,ix3))
+           x$symbol[ix] <- x$ensembl_gene_id[ix] 
 
-			 # convert chr.x to numbers		 
-			  j = max( chromosomesNumbers,na.rm=T) 
-			  for( i in 1:length( chromosomes)) {
-			   if ( is.na(chromosomesNumbers[i]) ) 
-			   { chromosomesNumbers[i] <- j+1; j <- j+1; }
-			 }
-			  
-			 x <- x[which(x$chromosome_name %in% chromosomes   ),]
-			 x <- droplevels(x)
-			 
-			# find the number coding for chromosome 
-			 getChrNumber <- function (chrName){
-			 return( chromosomesNumbers[ which( chromosomes == chrName)] )
-			 }
-			  x$chrNum = 1 # numeric coding
-			  x$chrNum <- unlist( lapply( x$chromosome_name, getChrNumber) )
-			 
-			 x$Row.names <- as.character( x$Row.names)
-		 
-			 # if symbol is missing use Ensembl id
-			 x$symbol = as.character(x$symbol)	 
-			 ix = which(is.na(x$symbol))
-			 ix2 = which(nchar(as.character(x$symbol))<= 2 )
-			 ix3 = which( duplicated(x$symbol))
-			 ix = unique( c(ix,ix2,ix3))
-			 x$symbol[ix] <- x$Row.names[ix] 
-						 
-		 
-			 ##################################
-			 # plotting
-			# x = read.csv("tem_genome.csv")
-			x = x[!is.na(x$chromosome_name),]
-			x = x[!is.na(x$start_position),]	
-			# only keep significant genes
-			#x = x[which(x$FDR<input$limmaPval),]
-			# x = x[which(abs(x$Fold) > log2( input$limmaFC)),]
+           x = x[!is.na(x$chromosome_name),]
+           x = x[!is.na(x$start_position),]
+            
+
+
+             tem = sort( table( x$chromosome_name), decreasing=T)
+             ch <- names( tem[tem >= 1 ] )  # ch with less than 100 genes are excluded
+             if(length(ch) > 50) ch <- ch[1:50]  # at most 50 ch
+             ch <- ch[ nchar(ch)<=12] # ch. name less than 10 characters
+             ch = ch[order(as.numeric(ch) ) ]
+             tem <- ch
+             ch <- 1:(length(ch))  # the numbers are continous from 1 to length(ch)
+             names(ch) <- tem  # the names are real chr. names
+
+
+             x <- x[which(x$chromosome_name %in% names(ch)),]
+             x <- droplevels(x)
+
+             x$chNum <- 1 # numeric encoding
+             x$chNum <- ch[ x$chromosome_name ]
+
+            # use max position as chr. length   before filtering
+           chLengthTable = aggregate(start_position~chromosome_name, data=x,max )
+              # add chr. numer 
+             chLengthTable$chNum <-  ch[ chLengthTable$chromosome_name ]
+             chLengthTable <- chLengthTable[!is.na( chLengthTable$chNum ), ]
+             chLengthTable <- chLengthTable[order(chLengthTable$chNum), c(3,2)]
+             chLengthTable <- chLengthTable[order(chLengthTable$chNum), ]
+             chLengthTable$start_position <- chLengthTable$start_position/1e6
+
+  
+           # only keep significant genes
+          ix = which( (x$FDR< as.numeric(input$limmaPvalViz)) &
+                        (abs(x$Fold) > log2( as.numeric(input$limmaFCViz) ) ) )
+
+           if (length(ix) > 5) { 
+
+             # remove nonsignificant / not selected genes
+             x0 <- x   # keep a copy
+             x = x[ix, ]  
+
+
+
+              # prepare coordinates
+             x$start_position = x$start_position/1000000 # Mbp
+             chD = 30 # distance between chs.
+             foldCutoff = 4   # max log2 fold 
+    
+             # 
+             x$Fold[which(x$Fold > foldCutoff )] = foldCutoff   # log2fold within -5 to 5
+             x$Fold[which(x$Fold <   -1*foldCutoff )] = -1*foldCutoff 
+             x$Fold = 4 * x$Fold
+    
+             x$y = x$chNum*chD + x$Fold
+             chTotal = dim(chLengthTable)[1] 
+             x$R = as.factor(sign(x$Fold))
+    
+             colnames(x)[ which(colnames(x) == "start_position")] = "x"
+
+             incProgress(0.3)
+             # plotting ----------------------------------
+
+             p <- ggplot() +  # don't define x and y, so that we could plot use two datasets
+                  geom_point(data = x, aes(x = x, y = y, colour = R, text = symbol), shape = 20, size = 0.2 ) 
+
+            if(input$labelGeneSymbol)
+                p <- p + geom_text(data = x, aes(x = x, y = y, label = symbol),
+                                    check_overlap = FALSE, angle = 45, size = 2, vjust = 0, nudge_y = 4 )
+             #label y with ch names
+             p <- p +  scale_y_continuous(labels = paste("chr", names(ch[chLengthTable$chNum]),sep=""), 
+                                          breaks = chD* (1:chTotal), 
+                                          limits = c(0, chD*(chTotal + 1) + 5) )
+             # draw horizontal lines for each ch.
+             for( i in 1:dim(chLengthTable)[1] )
+               p = p+ annotate( "segment",x = 0, xend = chLengthTable$start_position[i],
+                                y = chLengthTable$chNum[i]*chD, yend = chLengthTable$chNum[i]*chD)
+             # change legend  http://ggplot2.tidyverse.org/reference/scale_manual.html
+             p <- p + scale_colour_manual(name="",   # customize legend text
+                                          values=c("red", "blue"),
+                                          breaks=c("1","-1"),
+                                          labels=c("Up", "Dn")) 
+             p <- p + xlab("Position on chrs. (Mbp)") +  theme(axis.title.y=element_blank())      
+             p <- p + theme(legend.position="none")
+
+             incProgress(0.5)
+             # add trend lines------------------------------------------
+             x0 <- x0[x0$chromosome_name %in% unique(x$chromosome_name), ]
+             x0$chNum <- 1 # numeric encoding
+             x0$chNum <- ch[ x0$chromosome_name ]
+             x0$start_position = x0$start_position/1e6 # Mbp             
+
+             windowSize = as.numeric( input$MAwindowSize )#Mb            
+             steps = as.numeric( input$MAwindowSteps ) # step size is then windowSize / steps       
+             cutoff <- as.numeric(input$MAwindowCutoff) 
+
+             x0$Fold <-  x0$Fold - mean(x0$Fold) # centering             
+
+             incProgress(0.6)
+                             
+             for(i in 0:(steps-1)) {
+               #step size is  windowSize/steps   
+               # If windowSize=10 and steps = 2; then step size is 5Mb
+               # 1.3 becomes 5, 11.2 -> 15 for step 1
+               # 1.3 -> -5
+               x0$x <- ( floor((x0$start_position - i * windowSize / steps)/ windowSize )  
+                        + 0.5 + i / steps ) * windowSize
+
+               movingAverage1 <- x0 %>%
+                 select(chNum, x, Fold) %>%
+                 filter( x >= 0) %>%   # beginning bin can be negative for first bin in the 2nd step
+                 group_by(chNum, x) %>%
+                 summarize( ma = mean(Fold),
+                            n = n(),
+                            pval = ifelse( n() >= 3 && sd(Fold) > 0, t.test(Fold)$p.value, 0 ) ) %>%
+                 filter(!is.na(pval)) # na when only 1 data point?
+
+               if(i == 0) {
+                 movingAverage <- movingAverage1
+               } else {
+                 movingAverage <- rbind(movingAverage, movingAverage1)  
+               }        
+             }
+ 
+            
+             # translate fold to y coordinates
+             movingAverage <- movingAverage %>%
+                filter(n >= 3) %>%
+#                mutate( pval = p.adjust(pval, method = "fdr", n = length(pval[pval < 0.9]) ) )
+                mutate( pval = p.adjust(pval, method = "fdr" ) ) %>%
+                filter( pval < as.numeric(input$chRegionPval) ) %>%
+                mutate( y = ifelse(ma > 0, 1, -1)) %>% # upper bound
+                mutate(y = chNum * chD + 3 * y) %>%
+                mutate( ma = ifelse(ma > 0, 1, -1)) %>%
+                mutate( ma = as.factor(ma))
+
+              # significant regions are marked as horizontal error bars 
+             if(dim(movingAverage)[1] > 0) {
+               p <- p +
+                 geom_errorbarh(data = movingAverage, aes(x = x, 
+                                                          y = y, 
+                                                          xmin = x -windowSize/2, 
+                                                          xmax = x + windowSize/2,
+                                                          colour = ma), 
+                                 size = 2, 
+                                 height = 15 )
+
+                 # label significant regions
+                 sigCh <- sort(table(movingAverage$chNum), decreasing = TRUE)
+                 sigCh <- names(ch)[ as.numeric(names(sigCh)) ]
+                 if(length(sigCh) <= 5) { # more than 5 just show 5
+                   sigCh <- paste0("chr", sigCh, collapse = ", ")
+                 } else {
+                   sigCh <- sigCh[1:5]
+                   sigCh <- paste0("chr", sigCh, collapse = ", ")                  
+                   sigCh <- paste0(sigCh,", ...")
+                 }
+
+                 sigCh <- paste(dim(movingAverage)[1], 
+                                " enriched regions \n(",
+                                round( sum(chLengthTable$start_position)/ windowSize * steps * as.numeric(input$chRegionPval), 2),
+                                          " expected)  detected on:\n ", sigCh)
+                 
+               p <- p + annotate(geom = "text", 
+                          x = max(x$x) * 0.70,
+                          y = max(x$y) * 0.90,
+                          label = sigCh)
+
+
+             }
+
+         } # have genes after filter
 			
-			ix = which( (x$FDR< as.numeric(input$limmaPvalViz)) &
-			              (abs(x$Fold) > as.numeric(input$limmaFCViz) ) )
-			
-			if (length(ix) > 5) { 
+      }  # have 5+ genes to begin with
+              incProgress(1)
+	  ggplotly(p)
+    }) # progress
+  }) # isolate
+})
 
-				x = x[ix,]		
-				
-				x$start_position = x$start_position/1000000 # Mbp
-				chrD = 30 # distance between chrs.
-				foldCutoff = 4   # max log2 fold 
-				
-				x$Fold = x$Fold / sd(x$Fold)  # standardize fold change
-				
-				x$Fold[which(x$Fold > foldCutoff )] = foldCutoff   # log2fold within -5 to 5
-				x$Fold[which(x$Fold <   -1*foldCutoff )] = -1*foldCutoff 
-				x$Fold = 4* x$Fold
-				
-
-				
-				x$y = x$chrNum*chrD + x$Fold
-				chrLengthTable = aggregate(start_position~chrNum, data=x,max )
-				chrTotal = dim(chrLengthTable)[1]	
-				x$R = as.factor(sign(x$Fold))
-				
-				colnames(x)[ which(colnames(x) == "start_position")] = "x"
-
-				p= ggplot(x, aes(x = x, y = y, colour = R, text = symbol ) ) + geom_point(shape = 20, size = .2)
-				
-					#label y with chr names
-				p <- p +  scale_y_continuous(labels = paste("chr",chromosomes[chrLengthTable$chrNum],sep=""), 
-				                             breaks = chrD* (1:chrTotal), 
-				                             limits = c(0, chrD*chrTotal + 5) )
-				# draw horizontal lines for each chr.
-				for( i in 1:dim(chrLengthTable)[1] )
-					p = p+ annotate( "segment",x = 0, xend = chrLengthTable$start_position[i],
-						y = chrLengthTable$chrNum[i]*chrD, yend = chrLengthTable$chrNum[i]*chrD)
-				# change legend		http://ggplot2.tidyverse.org/reference/scale_manual.html
-				p=p+scale_colour_manual(name="",   # customize legend text
-					values=c("red", "blue"),
-					breaks=c("1","-1"),
-					labels=c("Up", "Dn"))	
-				p = p + xlab("Position on chrs. (Mbp)") +	 theme(axis.title.y=element_blank())					 
-				p= p + theme(legend.position="none")
-				# p <- ggplot(mtcars, aes(x=hp, y=mpg)) + geom_point(shape=20, size=17)
-			   # p=p+ geom_smooth(method = "lm",se=FALSE)
-				#p+ geom_line(aes(y=rollmean(y,7, na.pad=TRUE)))
-			  
-			   # Customize hover text https://cran.r-project.org/web/packages/plotly/plotly.pdf
-			   # style(ggplotly(p),hoverinfo="text")  # not working
-			  }  # if no genes else
-			
-		}
-		ggplotly(p)
-			}) # progress
-		}) # isloate
-	  })
-
+ 
 	  
 # pre-calculating PREDA, so that changing FDR cutoffs does not trigger entire calculation
 genomePlotDataPre <- reactive({
@@ -10347,7 +10326,8 @@ output$geneListBclustGO <- renderTable({
 
 		 })#progress
 		}) #isolate
-  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T, 
+     sanitize.text.function = function(x) x)
 	#   output$selectedHeatmap <- renderPlot({       hist(rnorm(100))    })
 
 	
@@ -10803,7 +10783,8 @@ output$networkModuleGO <- renderTable({
 
 		 })#progress
 		}) #isolate
-  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T)
+  }, digits = 0,spacing="s",striped=TRUE,bordered = TRUE, width = "auto",hover=T,
+sanitize.text.function = function(x) x)
 	#   output$selectedHeatmap <- renderPlot({       hist(rnorm(100))    })
 
 
