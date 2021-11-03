@@ -1318,7 +1318,6 @@ iDEPversion,
      ) # fluidRow
    ) # tabPanel
 
-  ,tags$head(includeScript("ga.js")) # tracking usage  
   )# Navibar
 
 ) #shinyUI
