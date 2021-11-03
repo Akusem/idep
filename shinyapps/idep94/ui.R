@@ -52,17 +52,16 @@ iDEPversion,
           checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
         )
 
-      ,fileInput('fileExpression', '3. Upload expression data (CSV or text)',
+      ,fileInput('fileExpression', '2. Upload expression data (CSV or text)',
                   accept = c(
                     'text/csv',
                     'text/comma-separated-values',
                     'text/tab-separated-values',
                     'text/plain',
                     '.csv',
-                    '.tsv'          
+                    '.tsv'
                   ) 
       )
-      ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
       ,fileInput('file2', h5('Optional: Upload an experiment design file(CSV or text)'),
                   accept = c(
                     'text/csv',
@@ -87,7 +86,6 @@ iDEPversion,
                ,DT::dataTableOutput('orgInfoTable')
 
        )# bsModal 4	
-      ,h5("Try ", a(" ShinyGO", href="https://bioinformatics.sdstate.edu/go/",target="_blank"), "for GO enrichment analysis")
       ,a( h5("?",align = "right"), href="https://idepsite.wordpress.com/data-format/",target="_blank")
                                                                                        # new window
       )
