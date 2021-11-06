@@ -10,11 +10,11 @@ library('shinyjs', verbose = FALSE)
 library('shinyjs', verbose = FALSE)
 library('reactable', verbose = FALSE)
 library(visNetwork) # interative network graphs
-iDEPversion = "iDEP.94"
+iDEPversion = tags$a("iDEP.94 (DiatOmicBase's instance)", style="color: #1f8ca4", href="http://localhost:3000")
 
 shinyUI(
 navbarPage(
-iDEPversion,
+  iDEPversion,
   id='navBar',
   
 #================================================================================================== 
@@ -41,6 +41,7 @@ iDEPversion,
       # Panel when loading library and using user data
       conditionalPanel("!output.usePreComp",
         h5("Wait for library loading", style="color:red", id="waitForLibrary")
+        ,h4("Only Phaeodactylum tricornutum data is supported", style="font-weight: bold")
         ,radioButtons("dataFileFormat", 
                       label = "1. Choose data type", 
                       choices = list("Read counts data (recommended)"                                          = 1, 
@@ -1311,7 +1312,7 @@ iDEPversion,
 
        ,br(),br()
        ,h5("In loving memory of my parents. X.G.")
-
+       ,tags$head(includeScript("setTitle.js"))
        ) #column
      ) # fluidRow
    ) # tabPanel
