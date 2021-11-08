@@ -10,7 +10,11 @@ library('shinyjs', verbose = FALSE)
 library('shinyjs', verbose = FALSE)
 library('reactable', verbose = FALSE)
 library(visNetwork) # interative network graphs
-iDEPversion = tags$a("iDEP.94 (DiatOmicBase's instance)", style="color: #1f8ca4", href="http://localhost:3000")
+dobUrl = Sys.getenv("DOB_URL") # Get Href to DiatOmicBase
+if (nchar(dobUrl) == 0) {
+  message("Warning: DiatOmicBase URL isn't setup")
+}
+iDEPversion = tags$a("iDEP.94 (DiatOmicBase's instance)", style="color: #1f8ca4", href=dobUrl)
 
 shinyUI(
 navbarPage(
