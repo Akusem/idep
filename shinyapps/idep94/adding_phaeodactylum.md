@@ -63,7 +63,7 @@
 
 12. Add the following line in `data_go/KEGG_Species_ID.csv` 
     ```csv
-    STRING.2850.Phaeodactylum, Phaeodactylum tricornutum genes (CCAP 1055/1),pti
+    STRING.2850.Phaeodactylum,Phaeodactylum tricornutum genes (CCAP 1055/1),pti
     ```
 Step 3 and 4 are done by script `add_phatr3_to_convertdb.py`
 
