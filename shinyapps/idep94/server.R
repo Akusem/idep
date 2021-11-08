@@ -2331,8 +2331,9 @@ rv <- reactiveValues()
 
 # Deactivate example file 
 rv$goButton <- 0
-# Select Phaeo as default species using gmtFile
-rv$selectOrg <- "NEW"
+# Select Phaeo as default species
+rv$selectOrg <- "499" # Set to 'BestMatch' when multiple species would need to be supported
+# Was using GMT file previously before modifing the database 
 rv$gmtFile <- data.frame(
 				name=c(gmtFile),
 				type=c("text/plain"),
