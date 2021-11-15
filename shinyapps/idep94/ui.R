@@ -602,8 +602,7 @@ navbarPage(
         ,tags$style(type='text/css', "#selectGO2 { width:100%;   margin-top:-9px}")
         ,actionButton("ModalEnrichmentPlot", "Enrichment tree")
      
-        ,actionButton("ModalVisNetworkDEG", "Network (New!)" )  
-        ,tags$head(tags$style("#ModalVisNetworkDEG{color: red}"))   
+        ,actionButton("ModalVisNetworkDEG", "Network" )  
         ,downloadButton('downloadGOTerms', "Enrichment details" )
         ,actionButton("STRINGdb_GO", "Enrichment using STRING API")
         ,h5("Also try",  a("ShinyGO", href="http://ge-lab.org/go/", target="_blank") )  
@@ -833,8 +832,7 @@ navbarPage(
         ,conditionalPanel("input.pathwayMethod == 1 | input.pathwayMethod == 2 |
                            input.pathwayMethod == 3| input.pathwayMethod == 4" 
           ,actionButton("ModalEnrichmentPlotPathway", "Pathway tree") 
-          ,actionButton("ModalVisNetworkPA", "Network(New!)" )
-        ,tags$head(tags$style("#ModalVisNetworkPA{color: red}"))   
+          ,actionButton("ModalVisNetworkPA", "Network" )
           #,actionButton("ModalExaminePathways", "Gene expression by pathway")
           ,downloadButton('downloadPathwayListData', "Pathway list w/ genes")          
         )
