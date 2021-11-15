@@ -105,7 +105,7 @@ navbarPage(
       ,div(id='loadMessage',
            h4('Loading R packages, please wait ... ... ...'))
       ,htmlOutput('fileFormat')
-      ,h3("This analysis is proposed using iDEP v.0.94 based on Ensembl Release 104 and STRING-db V11. 9/3/2021")
+      ,h3("This analysis is proposed using iDEP v.0.94")
       ,h4("If you use this analytic module, please cite:")
       ,h4("Ge, S.X., Son, E.W. & Yao, R. iDEP: an integrated web application for differential expression and pathway analysis of RNA-Seq data. BMC Bioinformatics 19, 534 (2018).", a("https://doi.org/10.1186/s12859-018-2486-6", href="https://doi.org/10.1186/s12859-018-2486-6"))
       ,br(),img(src='flowchart.png', align = "center",width="562", height="383")
