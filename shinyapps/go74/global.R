@@ -569,6 +569,7 @@ FindOverlap <- function (converted, gInfo, GO, selectOrg, minFDR, input_maxTerms
     # further filter by nominal P value
     #x <- subset(x, Pval < 0.2)
   
+
   #Background genes----------------------------------------------------
   if(!is.null(convertedB) && 
      !is.null(gInfoB) && 
@@ -592,6 +593,18 @@ FindOverlap <- function (converted, gInfo, GO, selectOrg, minFDR, input_maxTerms
         sqlQueryB = paste0(sqlQueryB, " AND pathwayID IN ('", paste(x$pathwayID, collapse="', '"),"')"  )
 
         if( GO != "All") sqlQueryB = paste0(sqlQueryB, " AND category ='",GO,"'")
+
+
+# alternative query. Same order as query genes.
+#   if( GO != "All") {
+#     sqlQueryB = paste( " select distinct gene,pathwayID from pathway where category='", GO, "'",
+#                          " AND gene IN ('", paste(querySetB, collapse="', '"),"')" ,sep="")
+#   } else {
+#     sqlQueryB = paste( " select distinct gene,pathwayID from pathway where gene IN ('", 
+#                        paste(querySetB, collapse="', '"),"')" ,sep="")
+#   }
+#       sqlQueryB = paste0(sqlQueryB, " AND pathwayID IN ('", paste(x$pathwayID, collapse="', '"),"')"  )
+
         resultB <- dbGetQuery( pathway, sqlQueryB  )
         if( dim(resultB)[1] ==0) {return(list( x=as.data.frame("No matching species or gene ID file!" )) )}    
         xB = table(resultB$pathwayID)
@@ -605,7 +618,13 @@ FindOverlap <- function (converted, gInfo, GO, selectOrg, minFDR, input_maxTerms
                       length(querySetB) - length(querySet),   
                       as.numeric(x2$overlapB), # use the number of genes in background set
                       lower.tail=FALSE ); 
-        
+
+        # calculate fold enrichment compared to background
+                  
+        x$fold <- x$overlap/length(querySet) /                    # ratio in query
+                  ( as.numeric(x2$overlapB) / length(querySetB) ) # ratio in background
+        # number of genes in pathways in background genes  
+        x$n <- as.numeric(x2$overlapB)     
       }
   
   # end background genes------------------------------------------------------------
