@@ -605,7 +605,6 @@ navbarPage(
         ,actionButton("ModalVisNetworkDEG", "Network" )  
         ,downloadButton('downloadGOTerms', "Enrichment details" )
         ,actionButton("STRINGdb_GO", "Enrichment using STRING API")
-        ,h5("Also try",  a("ShinyGO", href="http://ge-lab.org/go/", target="_blank") )  
         ,a(h5("?",align = "right"), href="https://idepsite.wordpress.com/degs/", target="_blank")        
         
         ,width=4
