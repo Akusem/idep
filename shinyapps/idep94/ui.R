@@ -105,7 +105,8 @@ navbarPage(
       ,div(id='loadMessage',
            h4('Loading R packages, please wait ... ... ...'))
       ,htmlOutput('fileFormat')
-      ,h3("This analysis is proposed using iDEP v.0.94")
+      ,h3(id='betaWarning', style='color: red', 'This is a Beta, don\'t hesitate to report any issues at', a("diatomicbase@bio.ens.psl.eu", href="mailto:diatomicbase@bio.ens.psl.eu"))
+      ,h3("This analysis is proposed using iDEP v.0.94, with Phaeodactylum data added")
       ,h4("If you use this analytic module, please cite:")
       ,h4("Ge, S.X., Son, E.W. & Yao, R. iDEP: an integrated web application for differential expression and pathway analysis of RNA-Seq data. BMC Bioinformatics 19, 534 (2018).", a("https://doi.org/10.1186/s12859-018-2486-6", href="https://doi.org/10.1186/s12859-018-2486-6"))
       ,br(),img(src='flowchart.png', align = "center",width="562", height="383")
