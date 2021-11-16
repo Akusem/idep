@@ -9445,7 +9445,7 @@ output$downloadEdgesDEG <- downloadHandler(
 
 # visualizing fold change on chrs. 
 output$genomePlotly <- renderPlotly({
-		if (is.null(input$file1)&& input$goButton == 0)   return(NULL)		
+		if (is.null(rv$fileExpression)&& input$goButton == 0)   return(NULL)		
 		tem = rv$selectOrg ; 
 		tem = input$selectContrast2
 		if (is.null(input$selectContrast2 ) ) return(NULL)
