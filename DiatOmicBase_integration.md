@@ -4,6 +4,8 @@ In order to modify IDEP to use it for DOB, I have changed and added the followin
 
 ## In `server.R`:
 
+Update `datapath` value to `/srv/data`.
+
 Next to datapath, add the Constant:
 
 ```R
@@ -20,8 +22,9 @@ rv <- reactiveValues()
 
 # Deactivate example file 
 rv$goButton <- 0
-# Select Phaeo as default species using gmt file
-rv$selectOrg <- "NEW"
+# Select Phaeo as default species
+rv$selectOrg <- "499" # Set to 'BestMatch' when multiple species would need to be supported
+# Was using GMT file previously before modifing the database 
 rv$gmtFile <- data.frame(
 				name=c(gmtFile),
 				type=c("text/plain"),
@@ -96,6 +99,32 @@ conditionalPanel("!output.usePreComp",
 Put in comment the code from `actionButton("goButton", "Click here to load demo data")` to
 the end of the conditionPanel for the selectOrg (containing the fileInput for gmtFile) 
 
+Replace menu in mainPanel with :
+
+```R
+      shinyjs::useShinyjs(),
+      tableOutput('sampleInfoTable')
+      ,tableOutput('contents')
+
+      ,div(id='loadMessage',
+           h4('Loading R packages, please wait ... ... ...'))
+      ,htmlOutput('fileFormat')
+      ,h3(id='betaWarning', style='color: red', 'This is a Beta version, don\'t hesitate to report any issues at', a("diatomicbase@bio.ens.psl.eu", href="mailto:diatomicbase@bio.ens.psl.eu"))
+      ,h3("This analysis is proposed using iDEP v.0.94, with Phaeodactylum data added")
+      ,h4("If you use this analytic module, please cite:")
+      ,h4("Ge, S.X., Son, E.W. & Yao, R. iDEP: an integrated web application for differential expression and pathway analysis of RNA-Seq data. BMC Bioinformatics 19, 534 (2018).", a("https://doi.org/10.1186/s12859-018-2486-6", href="https://doi.org/10.1186/s12859-018-2486-6"))
+      ,br(),img(src='flowchart.png', align = "center",width="562", height="383")
+
+```
+
+Remove the `Network (New!)` in red by replace them with simply `Network`,
+and removing the:
+```R
+tags$head(tags$style("#ModalVisNetworkDEG{color: red}"))
+```
+
+
+
 Remove the Google Analytics script at the end of ui file:
 ```R
   ,tags$head(includeScript("ga.js")) # tracking usage  
@@ -106,4 +135,14 @@ You can also delete ga.js in the idep folder.
 Add at the start or the end setTitle.js
 ```R
 	,tags$head(includeScript("setTitle.js"))
+```
+
+Update App title (named `iDEPversion`), and make the link with DOB by adding the following code after the library call:
+
+```R
+dobUrl = Sys.getenv("DOB_URL") # Get Href to DiatOmicBase
+if (nchar(dobUrl) == 0) {
+  message("Warning: DiatOmicBase URL isn't setup")
+}
+iDEPversion = tags$a("iDEP.94 (DiatOmicBase's instance)", style="color: #1f8ca4", href=paste(dobUrl, "transcriptomicsChoice", sep=""))
 ```
