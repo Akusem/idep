@@ -11,6 +11,11 @@ library('shinyjs', verbose = FALSE)
 library('reactable', verbose = FALSE)
 library(visNetwork) # interative network graphs
 iDEPversion = "iDEP.95"
+dobUrl = Sys.getenv("DOB_URL") # Get Href to DiatOmicBase
+if (nchar(dobUrl) == 0) {
+  message("Warning: DiatOmicBase URL isn't setup")
+}
+iDEPversion = tags$a("iDEP.95 (DiatOmicBase's instance)", style="color: #1f8ca4", href=paste(dobUrl, "transcriptomicsChoice", sep=""))
 
 shinyUI(
 navbarPage(
@@ -27,58 +32,64 @@ iDEPversion,
     # sidebar---------------------------------
     sidebarPanel(
   
-      actionButton("goButton", "Click here to load demo data"),
-      tags$head(tags$style("#goButton{color: red;
-                                 font-size: 16px;
-                                 font-style: italic;
-                                 }"),
+      tags$head(
+        # tags$style(
+        #  "#goButton{color: red;
+        #     font-size: 16px;
+        #     font-style: italic;
+        #   }"
+        # ),
         # Fix excessive padding around the body 
         tags$style("
           body {
             padding: 0 !important;
           }"
-                ))                    
-      ,h5(" and just click the tabs for some magic!", style = "color:red")
-      ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
-      ,strong("1. Optional:Select or search for your species.")
-      ,fluidRow( 
-         column(9, selectizeInput('selectOrg', 
-                     label    = NULL,
-                     choices  = " ",
-                     multiple = TRUE,
-                     options  = list( maxItems     = 1,               
-                                      placeholder  = 'Best matching species',
-                                      onInitialize = I('function() { this.setValue(""); }')) 
-                  )), 
-        column(3, actionButton("MorgInfo", "Info"))  
-      )  
-      ,conditionalPanel("input.selectOrg == 'NEW'",
-        fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
-                  accept = c(
-                    'text/csv',
-                    'text/comma-separated-values',
-                    'text/tab-separated-values',
-                    'text/plain',
-                    '.csv',
-                    '.tsv',
-                    '.gmt'          
-                  )
         )
-      ) # conditionalPanel
+      ),                
+      # actionButton("goButton", "Click here to load demo data"),
+      # ,h5(" and just click the tabs for some magic!", style = "color:red")
+      # ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
+      # ,strong("1. Optional:Select or search for your species.")
+      # ,fluidRow( 
+      #    column(9, selectizeInput('selectOrg', 
+      #                label    = NULL,
+      #                choices  = " ",
+      #                multiple = TRUE,
+      #                options  = list( maxItems     = 1,               
+      #                                 placeholder  = 'Best matching species',
+      #                                 onInitialize = I('function() { this.setValue(""); }')) 
+      #             )), 
+      #   column(3, actionButton("MorgInfo", "Info"))  
+      # )  
+      # ,conditionalPanel("input.selectOrg == 'NEW'",
+      #   fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
+      #             accept = c(
+      #               'text/csv',
+      #               'text/comma-separated-values',
+      #               'text/tab-separated-values',
+      #               'text/plain',
+      #               '.csv',
+      #               '.tsv',
+      #               '.gmt'          
+      #             )
+      #   )
+      # ) # conditionalPanel
+      conditionalPanel("!output.usePreComp",
+          # h5 to add
+          h5("Wait for library loading", style="color:red", id="waitForLibrary")
 
-
-      ,radioButtons("dataFileFormat", 
-                     label = "2. Choose data type", 
+        ,radioButtons("dataFileFormat",
+                     label = "1. Choose data type", 
                      choices = list("Read counts data (recommended)"                                          = 1, 
                                      "Normalized expression values (RNA-seq FPKM, microarray, etc.)"          = 2,
                                      "Fold-changes and corrected P values from CuffDiff or any other program" = 3),
                      selected = 1
-      )      
+        )      
       ,conditionalPanel("input.dataFileFormat == 3",
         checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
       )
       
-      ,fileInput('file1', '3. Upload expression data (CSV or text)',
+      ,fileInput('fileExpression', '2. Upload expression data (CSV or text)',
                   accept = c(
                     'text/csv',
                     'text/comma-separated-values',
@@ -88,7 +99,7 @@ iDEPversion,
                     '.tsv'          
                   ) 
       )
-      ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
+      # ,a(h4("Analyze public RNA-seq datasets for 9 species"), href="http://bioinformatics.sdstate.edu/reads/")
       ,fileInput('file2', h5('Optional: Upload an experiment design file(CSV or text)'),
                   accept = c(
                     'text/csv',
@@ -101,21 +112,22 @@ iDEPversion,
       )
       ,tableOutput('species' )
 
-      ,actionButton("MGeneIDexamples", "Example gene IDs")
-      ,bsModal("geneIDexamples", "What the gene IDs in our database look like?", "MGeneIDexamples", size = "large"
-               ,selectizeInput(inputId = "userSpecieIDexample",
-                               label = "Select or search for species", choices = NULL)
-               ,tableOutput("showGeneIDs4Species")
+      # ,actionButton("MGeneIDexamples", "Example gene IDs")
+      # ,bsModal("geneIDexamples", "What the gene IDs in our database look like?", "MGeneIDexamples", size = "large"
+      #          ,selectizeInput(inputId = "userSpecieIDexample",
+      #                          label = "Select or search for species", choices = NULL)
+      #          ,tableOutput("showGeneIDs4Species")
 
-       )# bsModal 4	
+      #  )# bsModal 4	
 
-      ,bsModal("orgInfoButton", "Search annotated species by common and scientific names, or NCBI taxonomy id. For other species, you can still use iDEP, except enrichment analysis.", "MorgInfo", size = "large"
-               ,DT::dataTableOutput('orgInfoTable')
+      # ,bsModal("orgInfoButton", "Search annotated species by common and scientific names, or NCBI taxonomy id. For other species, you can still use iDEP, except enrichment analysis.", "MorgInfo", size = "large"
+      #          ,DT::dataTableOutput('orgInfoTable')
 
-       )# bsModal 4	
-      ,h5("Try ", a(" ShinyGO", href="https://bioinformatics.sdstate.edu/go/",target="_blank"), "for GO enrichment analysis")
+      #  )# bsModal 4	
+      # ,h5("Try ", a(" ShinyGO", href="https://bioinformatics.sdstate.edu/go/",target="_blank"), "for GO enrichment analysis")
       ,a( h5("?",align = "right"), href="https://idepsite.wordpress.com/data-format/",target="_blank")
                                                                                        # new window
+      ), #conditionalPanel
     ), #sidebarPanel
   
   # Main Panel -------------------------------------
@@ -127,39 +139,11 @@ iDEPversion,
       ,div(id='loadMessage',
            h4('Loading R packages, please wait ... ... ...'))
       ,htmlOutput('fileFormat')
-                                   ,br(),h4("Trusted charities providing Aid in Ukraine selected by ", a("CharityWatch,",
-                                   href="https://www.charitywatch.org/charity-donating-articles/top-rated-charities-providing-aid-in-ukraine"),
-                                   "charities and individuals verified by",
-                                   a(" GoFundMe.", href=("https://www.gofundme.com/en-ie/c/act/donate-to-ukraine-relief?utm_source=email&utm_medium=marketing&utm_content=annoucement&utm_campaign=022522_helpukraine_send14_dedicatedpage"))
-                                   ), br()
-      ,p("Mar. 7, 2022: Fixed an R library issue affected KEGG diagrams for some organisms.")
-      ,p("Feb. 19, 2022: R upgraded from 4.05 to 4.1.2. This solved the STRING API issues. Some Bioconductor packages are also upgraded.", style = "color:red")
-      ,p("Feb. 11, 2022: Like iDEP but your genome is not covered?", 
-      a("Customized iDEP", href="http://bioinformatics.sdstate.edu/idepc/"), " is now available. 
-      Its database includes several custom genomes requested by users. To request to add new species/genome, fill in this ", 
-      a("Form.", href="https://forms.gle/zLtLnqxkW187AgT76"), style = "color:red")
-      ,p("Feb. 8, 2022: iDDEP v0.95 becomes default. Old versions are still available. See the last tab.")
-      ,p("Nov. 15, 2021: iDEP v0.95 available in testing mode. It includes Ensembl database update, new species from Ensembl Fungi and Ensembl Protists, and STRINGdb (5090 species) update from v11 to 11.5.")
-      ,p("10/26/2021: The Genome view is now much improved! Automatically detects chromosomal regions enriched with genes having abnormaly high and low fold-changes.")
-
-      ,p("10/15/21: For GO enrichment analysis, we now recommend using background genes, instead of all genes on the genome. In the KNN and DEG2 tabs, it is now the default that all genes passed the filter in Pre-Process tab are used as a customized background.")
-
-      ,p("We updated instruction for local installation", a("here.", href="https://github.com/iDEP-SDSU/idep#readme"), 
-          "The most recent database file is now publically available, free of charge for non-profit organizations.")
-
-      ,p("Check out the 50,000+ datasets of uniformly processed public RNA-seq data ", a("here!", href="http://bioinformatics.sdstate.edu/reads/" ))
-      ,p( a("Email Jenny for questions.",href="mailto:gelabinfo@gmail.com?Subject=iDEP"), "Dr. Ge is notorisly slow in responding to emails.") 
-
-      ,p("iDEP has not been thoroughly tested. Please let us know if you find any issue/bug.", style = "color:red")
-
-      ,p("10/18/20: Interactive network enables users to easily visualize the relatedness 
-           of pathways, similar to EnrichmentMap. Using the Network buttons on DEG2 and Pathway tabs,
-           you can generate and export interactive networks like this one below. You can move the nodes by dragging them, zoom in by scrolling, 
-			   and shift the entire network by click on an empty point and drag. ")
-      ,includeHTML("enrichmentPlotNetwork.html")
-       #,img(src='flowchart.png', align = "center",width="562", height="383")
-     # ) # conditionalPanel
-
+      ,h3(id='betaWarning', style='color: red', 'This is a Beta version, don\'t hesitate to report any issues at', a("diatomicbase@bio.ens.psl.eu", href="mailto:diatomicbase@bio.ens.psl.eu"))
+      ,h3("This analysis is proposed using iDEP v.0.95")
+      ,h4("If you use this analytic module, please cite:")
+      ,h4("Ge, S.X., Son, E.W. & Yao, R. iDEP: an integrated web application for differential expression and pathway analysis of RNA-Seq data. BMC Bioinformatics 19, 534 (2018).", a("https://doi.org/10.1186/s12859-018-2486-6", href="https://doi.org/10.1186/s12859-018-2486-6"))
+      ,br(),img(src='flowchart.png', align = "center",width="562", height="383")
     ) # main panel
   ) #sidebarLayout
 ) #tabPanel
@@ -652,8 +636,7 @@ iDEPversion,
         ,tags$style(type='text/css', "#selectGO2 { width:100%;   margin-top:-9px}")
         ,actionButton("ModalEnrichmentPlot", "Enrichment tree")
      
-        ,actionButton("ModalVisNetworkDEG", "Network (New!)" )  
-        ,tags$head(tags$style("#ModalVisNetworkDEG{color: red}"))   
+        ,actionButton("ModalVisNetworkDEG", "Network" )  
         ,downloadButton('downloadGOTerms', "Enrichment details" )
         ,actionButton("STRINGdb_GO", "Enrichment using STRING API")
         ,h5("Also try",  a("ShinyGO", href="http://ge-lab.org/go/", target="_blank") )  
@@ -883,8 +866,7 @@ iDEPversion,
         ,conditionalPanel("input.pathwayMethod == 1 | input.pathwayMethod == 2 |
                            input.pathwayMethod == 3| input.pathwayMethod == 4" 
           ,actionButton("ModalEnrichmentPlotPathway", "Pathway tree") 
-          ,actionButton("ModalVisNetworkPA", "Network(New!)" )
-        ,tags$head(tags$style("#ModalVisNetworkPA{color: red}"))   
+          ,actionButton("ModalVisNetworkPA", "Network" )
           #,actionButton("ModalExaminePathways", "Gene expression by pathway")
           ,downloadButton('downloadPathwayListData', "Pathway list w/ genes")          
         )
@@ -1374,7 +1356,7 @@ iDEPversion,
      ) # fluidRow
    ) # tabPanel
 
-  ,tags$head(includeScript("ga.js")) # tracking usage  
+  ,tags$head(includeScript("setTitle.js"))  
   )# Navibar
 
 ) #shinyUI
