@@ -101,4 +101,9 @@ Remove the Google Analytics script at the end of ui file:
   ,tags$head(includeScript("ga.js")) # tracking usage  
 ```
 
-You can also delete ga.js in the idep folder
+You can also delete ga.js in the idep folder.
+
+Add at the start or the end setTitle.js
+```R
+	,tags$head(includeScript("setTitle.js"))
+```
