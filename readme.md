@@ -5,9 +5,12 @@
 
 As a younger sister, [ShinyGO](http://ge-lab.org/go/) focuses on the enrichment analysis of gene lists. The same database is used. They live in the same GitHub repository. ShinyGO is published [here](https://doi.org/10.1093/bioinformatics/btz931). 
 
+## No Warranty
+iDEP and ShinyGO are both under active development, and have not been fully tested. With the help of many users, we are constantly fixing bugs/errors in both source code and sometimes database. We recommend that you confirm your findings using other tools before publishing or further studies.
 
 ## Local installation
-Local installation of this software is possible through steps below. But it is not supported or updated freqently. Local install is for non-profit organizations only. For-profit businesses please contact us.
+Local installation of this software is possible through steps below. But it is not supported or updated freqently. Local install is for non-profit organizations only. For-profit businesses please contact us. If you install locally, 
+please check for updates regularily here and download the latest versions of both the source code and database.  For most users, we recommend to visit our website. 
 
 ## To run iDEP and ShinyGO on your local machine (Windows, MacOS, Linux):
 Requirements:
@@ -15,7 +18,7 @@ Requirements:
 + More than 4GB memory
 + Most recent version of R and RStudio installed.
 
-1. Upgrade to the most recent version of R and Rstudio.
+1. Upgrade to the most recent version of R and Rstudio.(Important!!)
 2. Start RStudio and install all the R packages. As we need so many R packages, this may take several hours. You can let it run and get started on steps 3 and 4 below to save time. From RStudio console window:
 ```
 source https://raw.githubusercontent.com/iDEP-SDSU/idep/master/classes/librarySetup.R
@@ -24,6 +27,12 @@ source https://raw.githubusercontent.com/iDEP-SDSU/idep/master/classes/librarySe
 3. Download iDEP source code and example data files from GitHub. The best is to click the green "Code" button and select "Download ZIP" on this [page](https://github.com/iDEP-SDSU/idep). Unzip to a folder such as C:/IDEP, so that it contains all the subfolders such as config, classes, shinyapps, and so on.
 
 4. Download all the database files from [here](http://18.235.92.206:8080/). Unzip all files to a folder (C:/IDEP/data/data104), so that your database can be found by the most recent versions of iDEP and ShinyGO. For example, the convertIDs.db files should be at C:/IDEP/data/data104/convertIDs.db, and the pathway information files should be at C:/IDEP/data/data104/pathwayDB. 
+Below is an example folder structure. 
+
+<p align="center">
+  <img width="313" height="299" src="docs/folders.png">
+</p>
+
 
 5. Start Rstudio and load the ui.R and server.R scripts in the folder C:/IDEP/shinyapps/idep94. And then click on Run app. Similarily, the ShinyGO app could be started at the folder, C:/IDEP/shinyapps/go74/. 
 
@@ -69,9 +78,9 @@ The setup.sh script was tested only on Ubuntu. Wait until the script shows 'iDEP
 6. Start the Shiny server with Docker-compose from the idep folder.
 ```
 cd ~/idep
-sudo docker-compose up -d --scale webapp=10 
+sudo docker-compose up -d --scale webapp=15 
 ```
-Now the server is running with 15 containers to serve many concurrent users. Currently the number has to be 15. You should be able to use iDEP from a web browser with http://12.12.12.12/idep94/, where 12.12.12.12 is the IP address of the server. ShinyGO can used via http://12.12.12.12/go74/. The server's port 80 should be available and exposed.
+Now the server is running with 10 containers to serve many concurrent users. You should be able to use iDEP from a web browser with http://12.12.12.12/idep94/, where 12.12.12.12 is the IP address of the server. ShinyGO can used via http://12.12.12.12/go74/. The server's port 80 should be available and exposed.
 
 
 A [user](https://github.com/wresch) has contributed scripts to install a standalone version using [Singularity](https://www.sylabs.io/). Following the instruction in this [folder.](https://github.com/iDEP-SDSU/idep/tree/master/singularity_standalone)

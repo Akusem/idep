@@ -34,14 +34,51 @@ navbarPage(
       conditionalPanel("output.usePreComp",
         h4("You can select the analysis steps")
       ),
-      # Fix excessive padding around the body 
+
+
       tags$head(
+        # Example Button style 
+        # tags$style("
+        #   #goButton{
+        #     color: red;
+        #     font-size: 16px;
+        #     font-style: italic;
+        #   }"
+        # ),
+        # Fix excessive padding around the body 
         tags$style("
           body {
             padding: 0 !important;
           }"
         )
       ),
+
+      # actionButton("goButton", "Click here to load demo data"),
+      # ,h5(" and just click the tabs for some magic!", style = "color:red")
+      # ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
+      # ,strong("1. Optional:Select or search for your species.")
+      # ,fluidRow( 
+      #    column(9, selectizeInput('selectOrg', 
+      #                label    = NULL,
+      #                choices  = " ",
+      #                multiple = TRUE,
+      #                options  = list( maxItems     = 1,               
+      #                                 placeholder  = 'Best matching species',
+      #                                 onInitialize = I('function() { this.setValue(""); }')) 
+      #             )), 
+      #   column(3, actionButton("MorgInfo", "Info"))  
+      # )  
+      # ,conditionalPanel("input.selectOrg == 'NEW'",
+      #   fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
+      #             accept = c(
+      #               'text/csv',
+      #               'text/comma-separated-values',
+      #               'text/tab-separated-values',
+      #               'text/plain',
+      #               '.csv',
+      #               '.tsv',
+      #               '.gmt'          
+      #             )
       # Panel when loading library and using user data
       conditionalPanel("!output.usePreComp",
         h5("Wait for library loading", style="color:red", id="waitForLibrary")

@@ -649,6 +649,10 @@ matchedSpeciesInfo <- function (x) {
 # convert gene IDs to ensembl gene ids and find species
 # updated 10/15; some changes not included in Gavin's new version
 convertID <- function (query,selectOrg) {
+	# Solves the issue of app shut down when species is deleted after genes are uploaded.
+    if(is.null(selectOrg)) {
+      return(NULL)
+    }
 	querySet <- cleanGeneSet( unlist( strsplit( toupper(query),'\t| |\n|\\,')))
 	# querySet is ensgene data for example, ENSG00000198888, ENSG00000198763, ENSG00000198804
     querSetString <- paste0("('", paste(querySet,collapse="', '"),"')")
@@ -4431,7 +4435,7 @@ PCAplots4Download <- reactive({
 output$downloadPCA <- downloadHandler(
       filename = "PCA_MDS_tSNE.eps",
       content = function(file) {
-	  cairo_ps(file, width = 6, height = 6)
+	  cairo_ps(file, width = 8, height = 6)
 	  PCAplots4Download()
         dev.off()
       })    
@@ -5012,7 +5016,8 @@ output$KmeansPromoter <- renderTable({
 	incProgress(1/input$nClusters, , detail = paste("Cluster",toupper(letters)[i]) )
 	#query = rownames(x)[which(bar == i)]
 	query = rownames(Kmeans()$x)[which(Kmeans()$bar == i)]	
-	convertedID = convertID(query,rv$selectOrg, input$selectGO2 );#"gmax_eg_gene"
+	# convertedID = convertID(query,rv$selectOrg, input$selectGO2 );#"gmax_eg_gene"
+	convertedID = convertID(query,rv$selectOrg);#"gmax_eg_gene"
 	result <- promoter( convertedID,rv$selectOrg,input$radioPromoterKmeans )
 	
 	if( is.null(result)  ) next;   # result could be NULL
@@ -7177,7 +7182,8 @@ output$DEG.Promoter <- renderTable({
 		incProgress(1/2 )	
 		query = rownames(genes)[which(fc*i<0)]
 		if(length(query) < minGenesEnrichment) next; 
-		convertedID = convertID(query,rv$selectOrg, input$selectGO2 );#"gmax_eg_gene"
+		# convertedID = convertID(query,rv$selectOrg, input$selectGO2 );#"gmax_eg_gene"
+		convertedID = convertID(query,rv$selectOrg );#"gmax_eg_gene"
 		if(length(convertedID) < minGenesEnrichment) next; 
 		result <- promoter( convertedID,rv$selectOrg,input$radio.promoter )
 		
@@ -8774,7 +8780,7 @@ mypathview <- function (gene.data = NULL, cpd.data = NULL, pathway.id, species =
         if (is.na(kid.map[id.type])) 
             stop("Wrong input gene ID type for the species!")
         message("Info: Getting gene ID data from KEGG...")
-        gene.idmap = keggConv(kid.map2[id.type], species)
+        gene.idmap = KEGGREST::keggConv(kid.map2[id.type], species)
         message("Info: Done with data retrieval!")
         kegg.ids = gsub(paste(species, ":", sep = ""), "", names(gene.idmap))
         in.ids = gsub(paste0(kid.map2[id.type], ":"), "", gene.idmap)

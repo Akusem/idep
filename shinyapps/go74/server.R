@@ -518,7 +518,7 @@ server <- function(input, output, session){
         colnames(genes)[3]=c("gene")
         genes$lfc = 1
         mapped <- string_db$map(genes,"gene", removeUnmappedRows = TRUE )
-        
+        browser()
         incProgress(1/4,detail = paste("up regulated")  )
         up= subset(mapped, lfc>0, select="STRING_id", drop=TRUE )
         
@@ -853,7 +853,7 @@ server <- function(input, output, session){
            length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
           
           x <- x[ x$Set == "List", ] # remove background from selected genes
-          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
+          xB <- xB[ xB$Set == "List", ] # remove Genome genes from background
           xB$Set <- "Background"
           x <- rbind(x, xB)
           x2 <- x[which(x$gene_biotype == "protein_coding"),]  # only coding for some analyses
@@ -1001,7 +1001,7 @@ server <- function(input, output, session){
            length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
           
           x <- x[ x$Set == "List", ] # remove background from selected genes
-          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
+          xB <- xB[ xB$Set == "List", ] # remove Genome genes from background
           xB$Set <- "Background"
           x <- rbind(x, xB)
           x2 <- x[which(x$gene_biotype == "protein_coding"),]  # only coding for some analyses
@@ -1314,6 +1314,8 @@ server <- function(input, output, session){
     tem <- significantOverlaps();
     
     if(dim(tem$x)[2] ==1 ) return(NULL)  
+    tem$x <- tem$x[tem$x[, 3] < 1000, ] # remove patways with more than 1000 genes.  Very slow.
+    tem$x <- tem$x[order(-tem$x[, 4]), ] # sort by fold-enrichment
     choices = tem$x[,5]		
     selectInput("sigPathways", label="Select a significant KEGG pathway to show diagram with your genes highlighted in red:"
                 ,choices=choices)      
@@ -1458,7 +1460,7 @@ server <- function(input, output, session){
         if (is.na(kid.map[id.type])) 
           stop("Wrong input gene ID type for the species!")
         message("Info: Getting gene ID data from KEGG...")
-        gene.idmap = keggConv(kid.map2[id.type], species)
+        gene.idmap = KEGGREST::keggConv(kid.map2[id.type], species)
         message("Info: Done with data retrieval!")
         kegg.ids = gsub(paste(species, ":", sep = ""), "", names(gene.idmap))
         in.ids = gsub(paste0(kid.map2[id.type], ":"), "", gene.idmap)
@@ -1865,8 +1867,8 @@ output$genomePlotly <- renderPlotly({
            length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
           
           x <- x[ x$Set == "List", ] # remove background from selected genes
-          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
-          xB$Set <- "Genome"
+          xB <- xB[ xB$Set == "List", ] # remove Genome genes from background
+          xB$Set <- "Background"
           x <- rbind(x, xB)
         }
         # end background genes ------------
