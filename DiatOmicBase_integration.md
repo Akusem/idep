@@ -95,3 +95,10 @@ conditionalPanel("!output.usePreComp",
 
 Put in comment the code from `actionButton("goButton", "Click here to load demo data")` to
 the end of the conditionPanel for the selectOrg (containing the fileInput for gmtFile) 
+
+Remove the Google Analytics script at the end of ui file:
+```R
+  ,tags$head(includeScript("ga.js")) # tracking usage  
+```
+
+You can also delete ga.js in the idep folder
