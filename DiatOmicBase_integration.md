@@ -117,8 +117,7 @@ Replace menu in mainPanel with :
 
 ```
 
-Remove the `Network (New!)` in red by replace them with simply `Network`,
-and removing the:
+Remove the `Network (New!)` in red by replace them with simply `Network`, and removing the:
 ```R
 tags$head(tags$style("#ModalVisNetworkDEG{color: red}"))
 ```
