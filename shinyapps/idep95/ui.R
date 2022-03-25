@@ -45,22 +45,28 @@ iDEPversion,
             padding: 0 !important;
           }"
         )
-      ),                
+      ) 
       # actionButton("goButton", "Click here to load demo data"),
       # ,h5(" and just click the tabs for some magic!", style = "color:red")
       # ,p(HTML("<div align=\"right\"> <A HREF=\"javascript:history.go(0)\">Reset</A></div>" ))
-      # ,strong("1. Optional:Select or search for your species.")
-      # ,fluidRow( 
-      #    column(9, selectizeInput('selectOrg', 
-      #                label    = NULL,
-      #                choices  = " ",
-      #                multiple = TRUE,
-      #                options  = list( maxItems     = 1,               
-      #                                 placeholder  = 'Best matching species',
-      #                                 onInitialize = I('function() { this.setValue(""); }')) 
-      #             )), 
-      #   column(3, actionButton("MorgInfo", "Info"))  
-      # )  
+      ,conditionalPanel("!output.usePreComp",
+        h5("Wait for library loading", style="color:red", id="waitForLibrary")
+
+        ,strong("1. Optional:Select or search for your species.")
+        ,br()
+        ,br()
+        ,fluidRow( 
+          column(9, selectizeInput('selectOrg', 
+                      label    = NULL,
+                      choices  = " ",
+                      multiple = TRUE,
+                      options  = list( maxItems     = 1,               
+                                      placeholder  = 'Best matching species',
+                                      onInitialize = I('function() { this.setValue(""); }')) 
+                  )
+          ), 
+        # column(3, actionButton("MorgInfo", "Info"))  
+        )
       # ,conditionalPanel("input.selectOrg == 'NEW'",
       #   fileInput('gmtFile', 'Upload a geneset .GMT file for enrichment analysis (optional)',
       #             accept = c(
@@ -74,22 +80,20 @@ iDEPversion,
       #             )
       #   )
       # ) # conditionalPanel
-      conditionalPanel("!output.usePreComp",
-          # h5 to add
-          h5("Wait for library loading", style="color:red", id="waitForLibrary")
+
 
         ,radioButtons("dataFileFormat",
-                     label = "1. Choose data type", 
+                     label = "2. Choose data type", 
                      choices = list("Read counts data (recommended)"                                          = 1, 
                                      "Normalized expression values (RNA-seq FPKM, microarray, etc.)"          = 2,
                                      "Fold-changes and corrected P values from CuffDiff or any other program" = 3),
                      selected = 1
-        )      
+        )
       ,conditionalPanel("input.dataFileFormat == 3",
         checkboxInput("noFDR", "Fold-changes only, no corrected P values", value = FALSE)
       )
       
-      ,fileInput('fileExpression', '2. Upload expression data (CSV or text)',
+      ,fileInput('fileExpression', '3. Upload expression data (CSV or text)',
                   accept = c(
                     'text/csv',
                     'text/comma-separated-values',
