@@ -156,6 +156,10 @@ i= which(names(speciesChoice) == "Rat" ); speciesChoice <- move2(i)
 i= which(names(speciesChoice) == "Mouse"); speciesChoice <- move2(i)
 i= which(names(speciesChoice) == "Human"); speciesChoice <- move2(i)
 
+# DOB species definition
+speciesChoice = list("BestMatch", "499")
+names(speciesChoice) <- c("Best matching species", "Phaeodactylum tricornutum")
+
 GO_levels = dbGetQuery(convert, "select distinct id,level from GO  
                                 WHERE GO = 'biological_process'"  )
 level2Terms = GO_levels[which(GO_levels$level %in% c(2,3))  ,1]  # level 2 and 3
@@ -2318,7 +2322,7 @@ function(input, output,session) {
  # geneSets(): gene set as a list for pathway analysis
 options(shiny.maxRequestSize = 200*1024^2) # 200MB file max for upload
 observe({  updateSelectizeInput(session, "selectOrg", choices = speciesChoice, selected = speciesChoice[1], server = TRUE )      })
-
+  
   # for gene ID example
   observe({  updateSelectizeInput(session, "userSpecieIDexample", choices = speciesChoice, selected = speciesChoice[1] )      })  
 
@@ -2338,7 +2342,7 @@ rv <- reactiveValues()
 # Deactivate example file 
 rv$goButton <- 0
 # Select Phaeo as default species
-rv$selectOrg <- "499" # Set to 'BestMatch' when multiple species would need to be supported
+rv$selectOrg <- "BestMatch" # Set to 'BestMatch' when multiple species would need to be supported
 # Was using GMT file previously before modifing the database 
 rv$gmtFile <- data.frame(
 				name=c(gmtFile),
