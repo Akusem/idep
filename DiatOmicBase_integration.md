@@ -23,7 +23,7 @@ rv <- reactiveValues()
 # Deactivate example file 
 rv$goButton <- 0
 # Select Phaeo as default species
-rv$selectOrg <- "499" # Set to 'BestMatch' when multiple species would need to be supported
+rv$selectOrg <- "BestMatch" # Set to 'BestMatch' when multiple species would need to be supported
 # Was using GMT file previously before modifing the database 
 rv$gmtFile <- data.frame(
 				name=c(gmtFile),
@@ -70,6 +70,20 @@ output$fileFormat, next to hideElement for loadMessage:
 output$fileFormat <- renderUI({
   shinyjs::hideElement(id = 'loadMessage')
   shinyjs::hideElement(id = "waitForLibrary") # Line to add
+```
+
+In the Server function part, after `speciesChoice` initialization, so just after this piece of code:
+```r
+i= which(names(speciesChoice) == "Human"); speciesChoice <- move2(i)
+```
+
+Add the `speciesChoice` that will be used, to display only the species we want.
+It is a list of numbers, corresponding to the species number in `convertID.db`.
+The speciesName is setup as names for each element of the list.
+
+```R
+speciesChoice = list("BestMatch", "499")
+names(speciesChoice) <- c("Best matching species", "Phaeodactylum tricornutum")
 ```
 
 ## In `ui.R`
