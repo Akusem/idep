@@ -91,8 +91,7 @@ STRING_DB_VERSION <- "11.0" # what version of STRINGdb needs to be used
 ################################################################
 
 # relative path to data files
-# datapath = "../../data/data104b/"   # production server
-datapath = "/srv/data/data104/"   # production server
+datapath = "/srv/data/data104b/"   # production server
 # Path to the folder where expression file are stored (accessible by DOB and IDEP)
 readPath = "/srv/data/testReadFolder"
 # Phaeo GMT file name, for Phaeo support in enrichment
@@ -113,6 +112,8 @@ motifFiles = paste(datapath, "motif/", motifFiles,sep="")
 #demoDataFile2 = paste0(datapath,"data_go/BcellGSE71176_p53_sampleInfo.csv") # sample Info file
 demoDataFile = paste0(datapath, "data_go/BcellGSE71176_p53.csv") # GSE71176
 demoDataFile2 = paste0(datapath, "data_go/BcellGSE71176_p53_sampleInfo.csv") # sample Info file
+# demoDataFile = paste0(datapath, "exampleFile/smith2016_RPKM.csv") # smith2016 
+# demoDataFile2 = paste0(datapath, "data_go/BcellGSE71176_p53_sampleInfo.csv") # sample Info file
 quotes <- dbGetQuery(convert, " select * from quotes")
 quotes = paste0("\"",quotes$quotes,"\"", " -- ",quotes$author,".       ")
 
@@ -157,8 +158,8 @@ i= which(names(speciesChoice) == "Mouse"); speciesChoice <- move2(i)
 i= which(names(speciesChoice) == "Human"); speciesChoice <- move2(i)
 
 # DOB species definition
-speciesChoice = list("BestMatch", "499")
-names(speciesChoice) <- c("Best matching species", "Phaeodactylum tricornutum")
+speciesChoice = list("BestMatch", "499", "520")
+names(speciesChoice) <- c("Best matching species", "Phaeodactylum tricornutum", "Thalassiosira pseudonana")
 
 GO_levels = dbGetQuery(convert, "select distinct id,level from GO  
                                 WHERE GO = 'biological_process'"  )
