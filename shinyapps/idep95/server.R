@@ -158,7 +158,7 @@ i= which(names(speciesChoice) == "Mouse"); speciesChoice <- move2(i)
 i= which(names(speciesChoice) == "Human"); speciesChoice <- move2(i)
 
 # DOB species definition
-speciesChoice = list("BestMatch", "499", "520")
+speciesChoice = list("BestMatch", "500", "520") # 512 for pseudo nitzchia
 names(speciesChoice) <- c("Best matching species", "Phaeodactylum tricornutum", "Thalassiosira pseudonana")
 
 GO_levels = dbGetQuery(convert, "select distinct id,level from GO  
