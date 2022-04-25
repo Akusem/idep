@@ -10,18 +10,18 @@ library('shinyjs', verbose = FALSE)
 library('shinyjs', verbose = FALSE)
 library('reactable', verbose = FALSE)
 library(visNetwork) # interative network graphs
-iDEPversion = "iDEP.95"
+iDEPversion = "iDEP.951"
 
 shinyUI(
 navbarPage(
 iDEPversion,
-  id='navBar',
+  id='navBar', 
   
 #================================================================================================== 
 #   Load Data
 #================================================================================================== 
   
-  tabPanel("Load Data",
+  tabPanel("Load Data", value = 1,
  # titlePanel(h5("Upload Files")),
   sidebarLayout(
     # sidebar---------------------------------
@@ -132,6 +132,10 @@ iDEPversion,
                                    "charities and individuals verified by",
                                    a(" GoFundMe.", href=("https://www.gofundme.com/en-ie/c/act/donate-to-ukraine-relief?utm_source=email&utm_medium=marketing&utm_content=annoucement&utm_campaign=022522_helpukraine_send14_dedicatedpage"))
                                    ), br()
+      ,p("April 24, 2022: Add a tab for visualizing the fold-change of all genes in all KEGG diagrams across all comparisons!")
+      ,p("April 23, 2022: KEGG diagram on the Pathway tab is now working! Please email Jenny if you see any issues!")
+      ,p("April 23, 2022: DEG2 tab is now much faster! I hope people complained about it earlier!")
+      ,p("April 20, 2022: Plot one or more genes is now working. Bug fixed.")
       ,p("Mar. 7, 2022: Fixed an R library issue affected KEGG diagrams for some organisms.")
       ,p("Feb. 19, 2022: R upgraded from 4.05 to 4.1.2. This solved the STRING API issues. Some Bioconductor packages are also upgraded.", style = "color:red")
       ,p("Feb. 11, 2022: Like iDEP but your genome is not covered?", 
@@ -168,7 +172,7 @@ iDEPversion,
 #================================================================================================== 
 #   Pre-Process
 #================================================================================================== 
-  ,tabPanel("Pre-Process",
+  ,tabPanel("Pre-Process", value = 2,
     sidebarLayout(
   # sidebar of pre-process -----------------------------------
       sidebarPanel(
@@ -264,7 +268,7 @@ iDEPversion,
                  "examineDataB", size = "large", DT::dataTableOutput('examineData'))
          
         ,bsModal("modalExample1021", "Search for genes", "genePlot1", size = "large", 
-          textInput("geneSearch", "Enter full or partial gene ID, or list of genes separated by semicolon:", "HOXA1;e2f2;tp53"),
+          textInput("geneSearch", "Enter full or partial gene ID, or list of genes separated by semicolon:", "SNCA;Robo3;GAPDH"),
           checkboxInput("genePlotBox", label = "Show individual samples", value = FALSE),
           plotOutput("genePlot"),
           conditionalPanel("input.genePlotBox == 0", 
@@ -280,7 +284,7 @@ iDEPversion,
 #================================================================================================== 
 #   Heat map
 #================================================================================================== 
-  ,tabPanel("Heatmap",
+  ,tabPanel("Heatmap", value = 3,
     sidebarLayout(
 
       # sidebar of heatmap -----------------------------------
@@ -369,7 +373,7 @@ iDEPversion,
 #================================================================================================== 
 #  k-Means
 #================================================================================================== 
-  ,tabPanel("k-Means",
+  ,tabPanel("k-Means",value = 4,
     sidebarLayout(
   
   # sidebar of k-Means -----------------------------------
@@ -467,7 +471,7 @@ iDEPversion,
 #================================================================================================== 
 #  PCA
 #================================================================================================== 
-  ,tabPanel("PCA",
+  ,tabPanel("PCA",value = 5,
     sidebarLayout(
   
   # sidebar of PCA ----------------------------------------------------------------------------------
@@ -520,7 +524,7 @@ iDEPversion,
 #================================================================================================== 
 #  DEG1: Differentially expressed gene 1
 #================================================================================================== 
-  ,tabPanel("DEG1",
+  ,tabPanel("DEG1",value = 6,
     sidebarLayout(
   
     # sidebar of DEG1 --------------------------------------------------------------------------------
@@ -626,7 +630,7 @@ iDEPversion,
 #================================================================================================== 
 #  DEG2: Differentially expressed genes 2
 #================================================================================================== 
-  ,tabPanel("DEG2",
+  ,tabPanel("DEG2",value = 7,
     sidebarLayout(
   
       # sidebar of DEG2 --------------------------------------------------------------------------------
@@ -816,7 +820,7 @@ iDEPversion,
 #================================================================================================== 
 #  Pathway Analysis
 #================================================================================================== 
-  ,tabPanel("Pathway",
+  ,tabPanel("Pathway",value = 8,
     sidebarLayout(
   
       # sidebar of Pathway --------------------------------------------------------------------------------
@@ -840,9 +844,9 @@ iDEPversion,
         ,fluidRow( 
           column(6, numericInput( "minSetSize", 
                                   label = h5("Geneset size: Min."), 
-                                  min   = 5, 
+                                  min   = 1, 
                                   max   = 30, 
-                                  value = 15,
+                                  value = 5,
                                   step  = 1) ),
           column(6, numericInput( "maxSetSize", 
                                   label = h5("Max."), 
@@ -978,11 +982,41 @@ iDEPversion,
     )  #sidebarLayout     
   ) #tabPanel  
 
+#==================================================================================================
+#  KEGG    4/24/2022
+#==================================================================================================
+  ,tabPanel("KEGG", value = 9,
+    sidebarLayout(
+  
+      # sidebar of Bicluster --------------------------------------------------------------------------------
+      sidebarPanel(
+        h5("Visualize your fold-changes of all genes on all KEGG pathways"),
+        htmlOutput('keggPathwaysAll'),        
+        htmlOutput("listComparisonsKEGG"),        
+        selectInput("maxFCKEGG", "Fold-change (log2) cutoff in color code", 
+            choices = c(0.5, 1, 1.5, 2, 3, 4),
+            selected = 2),  
+        "Please cite the papers for ", 
+                  a("pathview, ", href="https://doi.org/10.1093/bioinformatics/btt285"), "and ",
+                  a("KEGG.", href="https://doi.org/10.1093/nar/gkaa970") 
+      ), # end of sidebar
+
+
+      # main panel of Biocluster ---------------------------------------------------------------------------
+      mainPanel(
+        h5("Bright red indicates most upregulated; bright green, most downregulated."),
+       imageOutput("KeggImage_temp", width = "100%", height = "100%")
+
+        
+      ) # mainPanel
+    )  #sidebarLayout     
+  ) #tabPanel  
+
 
 #================================================================================================== 
 #  Genome view
 #================================================================================================== 
-  ,tabPanel("Genome",
+  ,tabPanel("Genome",value = 10,
     sidebarLayout(  
       # sidebar of Genome --------------------------------------------------------------------------------
       sidebarPanel( 
@@ -1096,7 +1130,7 @@ iDEPversion,
 #==================================================================================================
 #  Bicluster
 #==================================================================================================
-  ,tabPanel("Bicluster",
+  ,tabPanel("Bicluster",value = 11,
     sidebarLayout(
   
       # sidebar of Bicluster --------------------------------------------------------------------------------
@@ -1152,7 +1186,7 @@ iDEPversion,
 #==================================================================================================
 #  Network
 #==================================================================================================
-  ,tabPanel("Network",
+  ,tabPanel("Network",value = 12,
     sidebarLayout(
   
       # sidebar of Network --------------------------------------------------------------------------
@@ -1245,7 +1279,7 @@ iDEPversion,
 #==================================================================================================
 #  Reproducibility
 #================================================================================================== 
-  ,tabPanel("R",
+  ,tabPanel("R",value = 13,
     fluidRow(    
       column(12,
         h4( a("Email us", href= "mailto:Xijin.Ge@SDSTATE.EDU?Subject=iDEP", target="_top") , 

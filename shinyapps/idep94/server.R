@@ -796,6 +796,7 @@ geneInfo <- function (converted,selectOrg){
 	if(length(ix) == 1)  # if only one file           #WBGene0000001 some ensembl gene ids in lower case
 	{ x = read.csv(as.character(geneInfoFiles[ix]) ); 
       x[,1]= toupper(x[,1]) 
+	  x$symbol <- gsub(" ", "", x$symbol) # remove spaces before gene symbol
       # if symbol is missing use Ensembl IDs
       x$symbol[ is.na( x$symbol) ] <- x[, 1]
       # if duplicated symbol, paste Ensembl id to the end
@@ -1005,7 +1006,7 @@ FindOverlap <- function (converted,gInfo, GO,selectOrg,minFDR, reduced = FALSE, 
 		if(reduced != FALSE && dim(x)[1] > 5){  # reduced=FALSE no filtering,  reduced = 0.9 filter sets overlap with 90%
 			n=  nrow(x)
 			tem=rep(TRUE,n )
-			geneLists = lapply(x$Genes, function(y) unlist( strsplit(as.character(y)," " )   ) )
+			geneLists = lapply(x$Genes, function(y) unlist( strsplit(as.character(y),"  " )   ) )
 			for( i in 2:n)
 				for( j in 1:(i-1) ) { 
 				  if(tem[j]) { # skip if this one is already removed
