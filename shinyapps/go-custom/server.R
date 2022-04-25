@@ -32,17 +32,19 @@ server <- function(input, output, session){
 
   #-----------hide tabs when N/A----------------------------------
   observeEvent(input$selectGO, {
-  # Show KEGG tab only when KEGG is selected
-    if(input$selectGO == "KEGG") {
-      showTab(inputId = "tabs", target = "2")
-    } else {
-     hideTab(inputId = "tabs", target = "2") 
-    }
+
+ # Show KEGG tab only when KEGG is selected  #disabled as of 4/8/2022. Confused biologists.
+    #if(input$selectGO == "KEGG") {
+    #  showTab(inputId = "tabs", target = "2")
+    #} else {
+    # hideTab(inputId = "tabs", target = "2") 
+    #}
+
   # Show Groups tab only when GOBP is selected
     if(input$selectGO == "GOBP" | input$selectGO == "GOCC" | input$selectGO == "GOMF" ) {
-      showTab(inputId = "tabs", target = "6")
+      showTab(inputId = "tabs", target = "7")
     } else {
-     hideTab(inputId = "tabs", target = "6") 
+     hideTab(inputId = "tabs", target = "7") 
     }
   })
 
@@ -60,7 +62,7 @@ server <- function(input, output, session){
 
   # this defines an reactive object that can be accessed from other rendering functions
   converted <- reactive({
-    if (input$goButton == 0)    return()
+    if (input$goButton == 0 | nchar(input$input_text) < 20)    return()
     
     convertID(input$input_text,input$selectOrg );
     
@@ -94,11 +96,16 @@ server <- function(input, output, session){
   } )
   
   significantOverlaps <- reactive({
-    if (input$goButton == 0 | is.null( input$selectGO) ) return()
+    if (input$goButton == 0 | is.null( input$selectGO) | nchar(input$input_text) < 20 ) return()
     tem = input$maxTerms
     tem = input$minFDR
     tem = input$selectOrg
     tem = input$selectGO
+    tem = input$SortPathways
+    tem = input$removeRedudantSets
+    tem = input$minSetSize
+    tem = input$maxSetSize
+
     isolate({ 
       withProgress(message= sample(quotes,1),detail="enrichment analysis", {
         #gene info is passed to enable lookup of gene symbols
@@ -106,8 +113,24 @@ server <- function(input, output, session){
         temb = geneInfoLookup_background(); 
         if(class(temb) == "data.frame")
           temb <- temb[which( temb$Set == "List"),]  	  
-        FindOverlap( converted(), tem, input$selectGO, input$selectOrg, input$minFDR, input$maxTerms, 
-                     converted_background(), temb )
+
+        if(input$removeRedudantSets) reduced = redudantGeneSetsRatio else reduced = FALSE
+
+        enrichment <- FindOverlap( converted(), tem, input$selectGO, input$selectOrg, input$minFDR, input$maxTerms, 
+                     converted_background(), temb, reduced = reduced, minSetSize = input$minSetSize, maxSetSize = input$maxSetSize  )
+
+        if(dim(enrichment$x)[2] > 1) {  # when there is no overlap, returns a data frame with 1 row and 1 column
+          if(input$SortPathways == "Sort by FDR")
+              enrichment$x <- enrichment$x[order(enrichment$x[, 1]), ] 
+          if(input$SortPathways == "Sort by Fold Enrichment")
+              enrichment$x <- enrichment$x[order(enrichment$x[, 4], decreasing = TRUE), ] 
+          if(input$SortPathways == "Sort by Genes")
+              enrichment$x <- enrichment$x[order(enrichment$x[, 2], decreasing = TRUE), ]  
+          if(input$SortPathways == "Sort by Category Name")
+              enrichment$x <- enrichment$x[order( enrichment$x[, 5]), ]  
+          }
+        return(enrichment)
+
       })
     })
   })
@@ -151,7 +174,7 @@ server <- function(input, output, session){
       withProgress(message= sample(quotes,1),detail=myMessage, {
         tem <- promoter( converted(),input$selectOrg,input$radio )
         incProgress(1, detail = paste("Done"))	  })
-      
+
       if( is.null(tem)) { return( as.data.frame("ID not recognized.") )} else {
         return(tem) }
       
@@ -278,15 +301,6 @@ server <- function(input, output, session){
     withProgress(message= sample(quotes,1),detail=myMessage, {
       pathways <- significantOverlaps()$x;
 
-      if(input$SortPathways == "Sort by FDR")
-           pathways <- pathways[order(pathways[, 1]), ] 
-      if(input$SortPathways == "Sort by Fold Enrichment")
-           pathways <- pathways[order(pathways[, 4], decreasing = TRUE), ] 
-      if(input$SortPathways == "Sort by Genes")
-           pathways <- pathways[order(pathways[, 2], decreasing = TRUE), ]  
-      if(input$SortPathways == "Sort by Category Name")
-           pathways <- pathways[order( pathways[, 5]), ]  
-
       pathways$Pathway <- hyperText(pathways$Pathway, pathways$URL )
       
       pathways <- pathways[, -7]
@@ -363,15 +377,23 @@ server <- function(input, output, session){
     enrichmentPlot(significantOverlaps2(), 56  )
     
   }, height=770, width=1000)
-  
+
+  # output$GOTermsTree4Download2 <- downloadHandler(
+ #   filename = "GO_terms_Tree.tiff",
+ #   content = function(file) {
+ #     tiff(file, width = input$treeWidth, height = input$treeHeight, units = 'in', res = 300, compression = 'lzw');
+ #     enrichmentPlot(significantOverlaps2(), 45  )
+ #     dev.off()
+ #   }) 
   output$GOTermsTree4Download <- downloadHandler(
-    filename = "GO_terms_Tree.tiff",
+    filename = "GO_terms_Tree.svg",
     content = function(file) {
-      tiff(file, width = 10, height = 6, units = 'in', res = 300, compression = 'lzw');
+      svg(file, width = max(4, input$treeWidth, na.rm = TRUE), 
+        height = max(2, input$treeHeight, na.rm = TRUE)
+      );
       enrichmentPlot(significantOverlaps2(), 45  )
       dev.off()
-    })
-  
+    })    
   output$enrichmentNetworkPlot <- renderPlot({
     if(is.null(significantOverlaps4())) return(NULL)
     
@@ -772,7 +794,7 @@ server <- function(input, output, session){
         selected = "All"
       }
     
-    selectInput("selectGO", label = h5("Pathway DB: Select KEGG for pathway diagrams"),
+    selectInput("selectGO", label = h5("Pathway database:"),
                 choices = choices,
                 selected = selected )    	
     
@@ -887,7 +909,7 @@ server <- function(input, output, session){
            length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
           
           x <- x[ x$Set == "List", ] # remove background from selected genes
-          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
+          xB <- xB[ xB$Set == "List", ] # remove Genome genes from background
           xB$Set <- "Background"
           x <- rbind(x, xB)
           x2 <- x[which(x$gene_biotype == "protein_coding"),]  # only coding for some analyses
@@ -1035,13 +1057,13 @@ server <- function(input, output, session){
            length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
           
           x <- x[ x$Set == "List", ] # remove background from selected genes
-          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
+          xB <- xB[ xB$Set == "List", ] # remove Genome genes from background
           xB$Set <- "Background"
           x <- rbind(x, xB)
           x2 <- x[which(x$gene_biotype == "protein_coding"),]  # only coding for some analyses
         }
         # end background genes
-        
+
         
         if(dim(x)[1]>=minGenes) # only making plots if more than 20 genes
         { # only plot when there 10 genes or more   # some columns have too many missing values
@@ -1385,7 +1407,7 @@ server <- function(input, output, session){
     if(dim(tem$x)[2] ==1 ) return(NULL)  
     tem$x <- tem$x[tem$x[, 3] < 1000, ] # remove patways with more than 1000 genes.  Very slow.
     tem$x <- tem$x[order(-tem$x[, 4]), ] # sort by fold-enrichment
-    choices = tem$x[,5]		
+    choices = tem$x[,5]	
     selectInput("sigPathways", label="Select a significant KEGG pathway to show diagram with your genes highlighted in red:"
                 ,choices=choices)      
   })
@@ -1939,8 +1961,8 @@ output$genomePlotly <- renderPlotly({
            length( convertedB$IDs) < maxGenesBackground + 1) { # if more than 30k genes, ignore background genes.
           
           x <- x[ x$Set == "List", ] # remove background from selected genes
-          xB <- xB[ xB$Set == "Genome", ] # remove Genome genes from background
-          xB$Set <- "Genome"
+          xB <- xB[ xB$Set == "List", ] # remove Genome genes from background
+          xB$Set <- "Background"
           x <- rbind(x, xB)
         }
         # end background genes ------------
