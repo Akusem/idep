@@ -967,32 +967,32 @@ iDEPversion,
 #==================================================================================================
 #  KEGG    4/24/2022
 #==================================================================================================
-  ,tabPanel("KEGG", value = 9,
-    sidebarLayout(
+  # ,tabPanel("KEGG", value = 9,
+  #   sidebarLayout(
   
-      # sidebar of Bicluster --------------------------------------------------------------------------------
-      sidebarPanel(
-        h5("Visualize your fold-changes of all genes on all KEGG pathways"),
-        htmlOutput('keggPathwaysAll'),        
-        htmlOutput("listComparisonsKEGG"),        
-        selectInput("maxFCKEGG", "Fold-change (log2) cutoff in color code", 
-            choices = c(0.5, 1, 1.5, 2, 3, 4),
-            selected = 2),  
-        "Please cite the papers for ", 
-                  a("pathview, ", href="https://doi.org/10.1093/bioinformatics/btt285"), "and ",
-                  a("KEGG.", href="https://doi.org/10.1093/nar/gkaa970") 
-      ), # end of sidebar
+  #     # sidebar of Bicluster --------------------------------------------------------------------------------
+  #     sidebarPanel(
+  #       h5("Visualize your fold-changes of all genes on all KEGG pathways"),
+  #       htmlOutput('keggPathwaysAll'),        
+  #       htmlOutput("listComparisonsKEGG"),        
+  #       selectInput("maxFCKEGG", "Fold-change (log2) cutoff in color code", 
+  #           choices = c(0.5, 1, 1.5, 2, 3, 4),
+  #           selected = 2),  
+  #       "Please cite the papers for ", 
+  #                 a("pathview, ", href="https://doi.org/10.1093/bioinformatics/btt285"), "and ",
+  #                 a("KEGG.", href="https://doi.org/10.1093/nar/gkaa970") 
+  #     ), # end of sidebar
 
 
-      # main panel of Biocluster ---------------------------------------------------------------------------
-      mainPanel(
-        h5("Bright red indicates most upregulated; bright green, most downregulated."),
-       imageOutput("KeggImage_temp", width = "100%", height = "100%")
+  #     # main panel of Biocluster ---------------------------------------------------------------------------
+  #     mainPanel(
+  #       h5("Bright red indicates most upregulated; bright green, most downregulated."),
+  #      imageOutput("KeggImage_temp", width = "100%", height = "100%")
 
         
-      ) # mainPanel
-    )  #sidebarLayout     
-  ) #tabPanel  
+  #     ) # mainPanel
+  #   )  #sidebarLayout     
+  # ) #tabPanel  
 
 
 #================================================================================================== 
