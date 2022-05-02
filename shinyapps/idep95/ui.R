@@ -30,7 +30,11 @@ iDEPversion,
   sidebarLayout(
     # sidebar---------------------------------
     sidebarPanel(
-  
+      # Message when precomp data have been loaded
+      conditionalPanel("output.usePreComp",
+        h4("You can select the analysis steps")
+      ),
+
       tags$head(
         # tags$style(
         #  "#goButton{color: red;
