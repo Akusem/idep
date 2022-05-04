@@ -93,7 +93,7 @@ STRING_DB_VERSION <- "11.0" # what version of STRINGdb needs to be used
 # relative path to data files
 datapath = "/srv/data/data104b/"   # production server
 # Path to the folder where expression file are stored (accessible by DOB and IDEP)
-readPath = "/srv/data/testReadFolder"
+readPath = "/srv/read/"
 # Phaeo GMT file name, for Phaeo support in enrichment
 gmtFile = "Phatr3.gmt"
 
@@ -2360,11 +2360,11 @@ observe({  	updateSelectizeInput(session, "speciesName", choices = sort(STRING10
 # Setup reactive values modifiable from server-side
 rv <- reactiveValues()
 
-# Deactivate example file 
+# Deactivate example file
 rv$goButton <- 0
-# Select Phaeo as default species
-rv$selectOrg <- "BestMatch" # Set to 'BestMatch' when multiple species would need to be supported
-# Was using GMT file previously before modifing the database 
+# Select BestMatch as default species
+rv$selectOrg <- "BestMatch"
+# Was using GMT file previously before modifing the database
 rv$gmtFile <- data.frame(
 				name=c(gmtFile),
 				type=c("text/plain"),
@@ -2378,6 +2378,7 @@ rv$gmtFile <- data.frame(
 output$usePreComp <- reactive({
 		query <- parseQueryString(session$clientData$url_search)
 		if (!is.null(query[["usePreComp"]])) {
+			# Load read file
 			tmpDf = data.frame(
 				name=c(query[["fileName"]]),
 				type=c("text/plain"),
@@ -2385,9 +2386,18 @@ output$usePreComp <- reactive({
 				datapath=c(file.path(readPath, query["fileName"]))
 			)
 			rv$fileExpression <- tmpDf
+			# Load experiment design file
+			tmpDesign = data.frame(
+				name=c(query[["fileName"]]),
+				type=c("text/plain"),
+				size=c(10),
+				datapath=c(file.path(readPath, paste(query["fileName"], "_design", sep="")))
+			)
+			rv$file2 <- tmpDesign
 			return(TRUE)
 		} else {
 			rv$fileExpression <- input$fileExpression
+			rv$file2 <- input$file2
 			return(FALSE)
 		}
 	})
@@ -2638,11 +2648,11 @@ readData <- reactive ({
 	})
 
 readSampleInfo <- reactive ({
-		if( is.null(input$file2) && !is.null( readData()$sampleInfoDemo ) ) return( readData()$sampleInfoDemo   )
-		inFile <- input$file2
+		if( is.null(rv$file2) && !is.null( readData()$sampleInfoDemo ) ) return( readData()$sampleInfoDemo   )
+		inFile <- rv$file2
 		inFile <- inFile$datapath
 
-		if(is.null(input$file2) && rv$goButton == 0)   return(NULL)
+		if(is.null(rv$file2) && rv$goButton == 0)   return(NULL)
 		if(is.null(readData() ) ) return(NULL)
 		#if(rv$goButton2 > 0 )   inFile = demoDataFile2
 		
@@ -11155,12 +11165,12 @@ output$downloadGeneInfo <- downloadHandler(
 # sampleInfo file name
 sampleInfoFileName <- reactive({
   	if (is.null(rv$fileExpression)&& rv$goButton == 0)   return(NULL)
-	if( is.null(input$file2) && !is.null( readData()$sampleInfoDemo ) ) # if using demo data
+	if( is.null(rv$file2) && !is.null( readData()$sampleInfoDemo ) ) # if using demo data
 		return(demoDataFile2) else 
-	if( is.null(input$file2) )
+	if( is.null(rv$file2) )
 		return(NULL)  else
 	{ 	
-	  inFile <- input$file2    # user data
+	  inFile <- rv$file2    # user data
 	  inFile <- inFile$datapath
 	  return(inFile)		
 	}
