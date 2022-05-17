@@ -4086,7 +4086,9 @@ output$PCA <- renderPlot({
 		}
 	####################################
 	# for showing shapes on ggplot2. The first 6 are default. Default mapping can only show 6 types.
-	shapes = c(16,17,15,3,7,8,   1,2,4:6,9:15,18:25  )
+	shapes = c(16,17,15,3,7,8,   1,2,4:6,9:15,18:25)
+	# Repeat shapes, it will have different colors
+	shapes = rep(shapes, length.out=100)
 
 	withProgress(message=sample(quotes,1), detail ="Running ", {
 
@@ -4283,7 +4285,9 @@ PCAplots4Download <- reactive({
 		}
 	####################################
 	# for showing shapes on ggplot2. The first 6 are default. Default mapping can only show 6 types.
-	shapes = c(16,17,15,3,7,8,   1,2,4:6,9:15,18:25  )
+	shapes = c(16,17,15,3,7,8,   1,2,4:6,9:15,18:25)
+	# Repeat shapes, it will have different colors
+	shapes = rep(shapes, length.out=100)
 
 	withProgress(message="Running ", {
 
